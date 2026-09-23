@@ -4836,7 +4836,7 @@ function FounderDashboard({onClose, founderPw}){
                                   }
                                   setRewardsLoading(true);
                                   const codes=newReward.codes.split("\n").map(c=>c.trim()).filter(Boolean);
-                                  await apiAdminBulkAddCodes(newReward.brand, newReward.label, Number(newReward.cost_coins, codes,founderPw);
+                                  await apiAdminBulkAddCodes(newReward.brand, newReward.label, Number(newReward.cost_coins), codes, founderPw);
                                   const rw=await apiAdminGetRewards(founderPw); setRewards(rw);
                                   setShowAddReward(false);
                                   setNewReward({brand:"",label:"",cost_coins:"",codes:""});
