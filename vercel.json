@@ -6,6 +6,8 @@
     "api/**/*.js": { "maxDuration": 30 }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/admin/:route", "destination": "/api/admin/[route]" },
+    { "source": "/api/users/:route", "destination": "/api/users/[route]" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
