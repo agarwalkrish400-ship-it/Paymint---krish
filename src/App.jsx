@@ -4441,7 +4441,7 @@ function FounderDashboard({onClose, founderPw}){
         <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
           {TABS.map(t=>(
             <motion.button key={t} whileTap={{scale:0.95}} onClick={()=>handleTabChange(t)}
-              style={{padding:"5px 13px",borderRadius:20,border:"none",cursor:"pointer",flexShrink:0,
+              style={{padding:"5px 13px",borderRadius:20,cursor:"pointer",flexShrink:0,
                 background:tab===t?"rgba(74,158,255,0.18)":T.glass,
                 border:`1px solid ${tab===t?T.blue:T.glassBorder}`,
                 color:tab===t?T.blue:T.textSub,
@@ -4951,7 +4951,7 @@ function FounderDashboard({onClose, founderPw}){
                                   setRewardsLoading(true);
                                   // Toggle active on all codes in this group
                                   const newActive = g.active > 0 ? false : true;
-                                  await Promise.all(g.codes.filter(c=>c.stock>0).map(c=>apiFetch("/api/rewards/manage",{method:"PATCH",founderPw,body:{action:"toggle",brand:g.brand,label:g.label,active:newActive}},{},founderPw));
+                                  await Promise.all(g.codes.filter(c=>c.stock>0).map(c=>apiFetch("/api/rewards/manage",{method:"PATCH",founderPw,body:{action:"toggle",brand:g.brand,label:g.label,active:newActive}},{},founderPw)));
                                   const rw=await apiAdminGetRewards(founderPw); setRewards(rw);
                                   setRewardsLoading(false);
                                   setActionMsg(`${g.brand} ${newActive?"activated":"deactivated"}.`);
@@ -5094,7 +5094,8 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
   const handleSavePurchase=async()=>{
     if(!purchaseNote.trim()||savingNote) return;
     setSavingNote(true);
-    const txId    = purchaseInputTxId;
+    try {
+      const txId    = purchaseInputTxId;
     const note    = purchaseNote.trim();
     const bonus   = bonusPendingTxIds[txId];
     const already = txns.find(t=>t.id===txId)?.bonus_claimed;
