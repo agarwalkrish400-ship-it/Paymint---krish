@@ -5127,10 +5127,12 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
     }catch(e){}
     setPurchaseInputTxId(null);
     setPurchaseNote("");
-} finally {
-      setSavingNote(false);
-    }
-  };
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setSavingNote(false);
+  }
+};
 
   const handleTx=async(tx,ssUrl)=>{
     try {
