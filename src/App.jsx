@@ -4394,6 +4394,102 @@ function FounderDashboard({onClose, founderPw}){
     if(d<86400)return`${Math.floor(d/3600)}h ago`;return`${Math.floor(d/86400)}d ago`;
   };
 
+  const exportToCsv = (filename, rows) => {
+    if (!rows || !rows.length) {
+      setActionMsg("No data available to export.");
+      return;
+    }
+    const separator = ",";
+    const keys = Object.keys(rows[0]);
+    const csvContent =
+      keys.join(separator) +
+      "\n" +
+      rows.map(row => {
+        return keys.map(k => {
+          let cell = row[k] === null || row[k] === undefined ? "" : String(row[k]);
+          cell = cell.replace(/"/g, '""');
+          if (cell.search(/("|,|\n|\r)/g) >= 0) {
+            cell = `"${cell}"`;
+          }
+          return cell;
+        }).join(separator);
+      }).join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setActionMsg(`Exported ${filename} (opens in Excel)`);
+  };
+
+  const handleExport = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (tab === "users") {
+      const exportUsers = users.map(u => ({
+        "User ID": u.id,
+        "Name": u.name || "",
+        "Email": u.email || "",
+        "Age": u.age || "",
+        "Occupation": u.occupation || "",
+        "Coin Balance": Number(u.coin_balance || 0).toFixed(1),
+        "Base Coins": Number(u.base_coins || 0).toFixed(1),
+        "Bonus Coins": Number(u.bonus_coins || 0).toFixed(1),
+        "Status": u.is_banned ? "Banned" : u.is_demo ? "Demo" : "Active",
+        "Joined At": u.joined_at ? new Date(u.joined_at).toLocaleString() : "",
+      }));
+      exportToCsv(`paymint_users_${today}.csv`, exportUsers);
+    } else if (tab === "redemptions") {
+      const exportRedemptions = redemptions.map(r => ({
+        "ID": r.id,
+        "User Email": r.user_email || "",
+        "Brand": r.brand || "",
+        "Label": r.label || "",
+        "Coupon Code": r.code || "",
+        "Coins Spent": r.coins_spent || 0,
+        "Redeemed At": r.redeemed_at ? new Date(r.redeemed_at).toLocaleString() : "",
+      }));
+      exportToCsv(`paymint_redemptions_${today}.csv`, exportRedemptions);
+    } else if (tab === "rewards") {
+      const exportRewards = rewards.map(r => ({
+        "ID": r.id,
+        "Brand": r.brand || "",
+        "Label": r.label || "",
+        "Cost (Coins)": r.cost_coins || 0,
+        "Code": r.code || "",
+        "Stock": r.stock || 0,
+        "Active": r.active ? "Yes" : "No",
+        "Created At": r.created_at ? new Date(r.created_at).toLocaleString() : "",
+      }));
+      exportToCsv(`paymint_rewards_${today}.csv`, exportRewards);
+    } else {
+      // "transactions" or "overview": export full transactions list
+      const exportTxns = txns.map(t => ({
+        "Txn ID": t.id,
+        "User Name": t.user_name || "",
+        "User Email": t.user_email || "",
+        "Merchant": t.merchant || "",
+        "Amount (INR)": t.amount || 0,
+        "Coins Earned": t.coins || t.total_coins || 0,
+        "Base Coins": t.base_coins || 0,
+        "Bonus Coins": t.bonus_coins || 0,
+        "Payment App": t.payment_app || "",
+        "Bank": t.bank || "",
+        "UTR Reference": t.txn_id || "",
+        "Txn Date": t.txn_date || "",
+        "Txn Time": t.txn_time || "",
+        "Screenshot URL": t.screenshot_url || "",
+        "Purchase Note": t.purchase_note || "",
+        "Submitted At": t.created_at ? new Date(t.created_at).toLocaleString() : "",
+      }));
+      exportToCsv(`paymint_transactions_${today}.csv`, exportTxns);
+    }
+  };
+
   return(
     <motion.div initial={{opacity:0,scale:0.96,filter:"blur(6px)"}}
       animate={{opacity:1,scale:1,filter:"blur(0px)"}}
@@ -4452,7 +4548,17 @@ function FounderDashboard({onClose, founderPw}){
             <h2 style={{margin:0,fontSize:18,fontWeight:800,color:T.text}}>Admin Dashboard</h2>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <motion.button whileTap={{scale:0.9}} onClick={handleExport}
+              title="Export current tab to Excel / CSV"
+              style={{height:32,borderRadius:9,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                display:"flex",alignItems:"center",gap:5,padding:"0 10px",cursor:"pointer",color:T.textSub,fontSize:11.5,fontWeight:600,fontFamily:"inherit"}}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2v8m0 0l-3-3m3 3l3-3M2 13h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Export
+            </motion.button>
             <motion.button whileTap={{scale:0.9}} onClick={refresh}
+              title="Refresh live data from Neon"
               style={{width:32,height:32,borderRadius:9,background:T.glass,border:`1px solid ${T.glassBorder}`,
                 display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
