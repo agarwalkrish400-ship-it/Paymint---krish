@@ -2844,26 +2844,55 @@ async function apiAdminManageReward(action, brand, label, data, pw) {
   return !isErr(r);
 }
 
-// ── Screenshot upload via Cloudinary ─────────────────────────────────────────
+// ── Screenshot upload (Cloudinary with direct Neon base64 fallback) ─────────
 async function apiUploadScreenshot(file) {
-  // Get signed upload params from backend
-  const sigRes = await apiFetch('/api/upload', { method: 'POST' });
-  if (isErr(sigRes)) {
-    console.warn('[UPLOAD] Could not get upload signature — skipping screenshot');
-    return null;
-  }
+  if (!file) return null;
+  // 1. Try Cloudinary if configured on backend
   try {
-    const fd = new FormData();
-    fd.append('file',      file);
-    fd.append('api_key',   sigRes.api_key);
-    fd.append('timestamp', sigRes.timestamp);
-    fd.append('signature', sigRes.signature);
-    fd.append('folder',    sigRes.folder);
-    const uploadRes = await fetch(sigRes.url, { method: 'POST', body: fd });
-    const uploadData = await uploadRes.json();
-    return uploadData.secure_url || null;
+    const sigRes = await apiFetch('/api/upload', { method: 'POST' });
+    if (!isErr(sigRes) && sigRes.url && sigRes.api_key) {
+      const fd = new FormData();
+      fd.append('file',      file);
+      fd.append('api_key',   sigRes.api_key);
+      fd.append('timestamp', sigRes.timestamp);
+      fd.append('signature', sigRes.signature);
+      fd.append('folder',    sigRes.folder);
+      const uploadRes = await fetch(sigRes.url, { method: 'POST', body: fd });
+      const uploadData = await uploadRes.json();
+      if (uploadData.secure_url) return uploadData.secure_url;
+    }
   } catch (e) {
-    console.warn('[UPLOAD] Cloudinary upload failed:', e.message);
+    console.warn('[UPLOAD] Cloudinary upload skipped:', e.message);
+  }
+
+  // 2. Direct fallback: Compress to lightweight JPEG base64 and store directly in Neon DB!
+  try {
+    return await new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const maxW = 1000;
+        const scale = img.width > maxW ? maxW / img.width : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      };
+      img.src = url;
+    });
+  } catch (e) {
+    console.warn('[UPLOAD] Fallback compression failed:', e.message);
     return null;
   }
 }
@@ -4271,6 +4300,7 @@ function FounderDashboard({onClose, founderPw}){
   const [editReward,setEditReward]=useState(null);
   const [newReward,setNewReward]=useState({brand:"",label:"",cost_coins:"",codes:""});
   const [editRwForm,setEditRwForm]=useState({});
+  const [viewingScreenshot,setViewingScreenshot]=useState(null);
 
   useEffect(()=>{
     (async()=>{
@@ -4526,6 +4556,34 @@ function FounderDashboard({onClose, founderPw}){
         )}
       </AnimatePresence>
 
+      {/* Screenshot Lightbox Modal */}
+      <AnimatePresence>
+        {viewingScreenshot && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            onClick={()=>setViewingScreenshot(null)}
+            style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.92)",
+              backdropFilter:"blur(16px)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+            <div style={{width:"100%",maxWidth:380,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:T.text}}>Payment Screenshot</p>
+              <button onClick={()=>setViewingScreenshot(null)}
+                style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                ✕
+              </button>
+            </div>
+            <img src={viewingScreenshot} alt="Payment Screenshot"
+              onClick={e=>e.stopPropagation()}
+              style={{maxWidth:"100%",maxHeight:"75vh",borderRadius:14,border:"1px solid rgba(255,255,255,0.15)",boxShadow:"0 10px 40px rgba(0,0,0,0.8)",objectFit:"contain"}}/>
+            <div style={{marginTop:14,display:"flex",gap:10}}>
+              <a href={viewingScreenshot} download="payment_screenshot.jpg"
+                onClick={e=>e.stopPropagation()}
+                style={{padding:"8px 16px",borderRadius:20,background:T.blue,color:"white",fontSize:12,fontWeight:700,textDecoration:"none"}}>
+                Download Image
+              </a>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div style={{padding:"52px 20px 0",flexShrink:0,
         background:"linear-gradient(to bottom,rgba(0,0,0,0.97),rgba(0,0,0,0.7),transparent)"}}>
@@ -4744,12 +4802,12 @@ function FounderDashboard({onClose, founderPw}){
                             </div>
                           </div>
                           {tx.screenshot_url&&(
-                            <a href={tx.screenshot_url} target="_blank" rel="noreferrer"
-                              style={{fontSize:10.5,color:T.blue,textDecoration:"none",
-                                display:"inline-block",marginTop:4,
-                                background:"rgba(74,158,255,0.1)",borderRadius:5,padding:"2px 8px"}}>
+                            <button onClick={()=>setViewingScreenshot(tx.screenshot_url)}
+                              style={{background:"rgba(74,158,255,0.12)",border:"1px solid rgba(74,158,255,0.25)",
+                                color:T.blue,fontSize:10.5,fontWeight:700,borderRadius:5,
+                                padding:"3px 8px",cursor:"pointer",display:"inline-block",marginTop:4}}>
                               View Screenshot ↗
-                            </a>
+                            </button>
                           )}
                         </div>
                       ))
@@ -4826,12 +4884,12 @@ function FounderDashboard({onClose, founderPw}){
                           <p style={{margin:0,fontSize:11,color:T.textSub,marginTop:1}}>{tx.user_name} · {tx.user_email}</p>
                           <p style={{margin:"2px 0 0",fontSize:10.5,color:T.textMute}}>{timeAgo(tx.created_at)}</p>
                           {tx.screenshot_url&&(
-                            <a href={tx.screenshot_url} target="_blank" rel="noreferrer"
-                              style={{fontSize:10.5,color:T.blue,textDecoration:"none",
-                                background:"rgba(74,158,255,0.1)",borderRadius:5,
-                                padding:"2px 8px",display:"inline-block",marginTop:4}}>
+                            <button onClick={()=>setViewingScreenshot(tx.screenshot_url)}
+                              style={{background:"rgba(74,158,255,0.12)",border:"1px solid rgba(74,158,255,0.25)",
+                                color:T.blue,fontSize:10.5,fontWeight:700,borderRadius:5,
+                                padding:"3px 8px",cursor:"pointer",display:"inline-block",marginTop:4}}>
                               Screenshot ↗
-                            </a>
+                            </button>
                           )}
                         </div>
                         <div style={{textAlign:"right",flexShrink:0}}>
