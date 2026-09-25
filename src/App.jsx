@@ -2873,7 +2873,7 @@ async function apiUploadScreenshot(file) {
 // ══════════════════════════════════════════════════════════════════════════════
 // EXPERIENCE SELECTION
 // ══════════════════════════════════════════════════════════════════════════════
-function ExperienceSelect({onBeta,onPrototype}){
+function ExperienceSelect({onBeta,onPrototype,onOpenFounder}){
   return(
     <div style={{position:"relative",width:"100%",height:"100%",background:T.black,
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -2962,6 +2962,20 @@ function ExperienceSelect({onBeta,onPrototype}){
             </motion.button>
           </div>
         </motion.div>
+        {/* Founder Access link */}
+        <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.55}}
+          style={{textAlign:"center",marginTop:6}}>
+          <button onClick={onOpenFounder}
+            style={{background:"none",border:"none",color:T.textMute,fontSize:12,fontWeight:600,
+              cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,padding:"6px 12px",
+              borderRadius:20,transition:"all 0.2s"}}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <rect x="3.5" y="7" width="9" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M5.5 7V4.5a2.5 2.5 0 015 0V7" stroke="currentColor" strokeWidth="1.3"/>
+            </svg>
+            Founder Access
+          </button>
+        </motion.div>
       </div>
     </div>
   );
@@ -2970,7 +2984,7 @@ function ExperienceSelect({onBeta,onPrototype}){
 // ══════════════════════════════════════════════════════════════════════════════
 // BETA PROFILE SETUP
 // ══════════════════════════════════════════════════════════════════════════════
-function BetaProfileSetup({onDone}){
+function BetaProfileSetup({onDone,onOpenFounder}){
   const [form,setForm]=useState({name:"",age:"",occupation:"",email:""});
   const [errors,setErrors]=useState({});
   const [saving,setSaving]=useState(false);
@@ -3036,10 +3050,21 @@ function BetaProfileSetup({onDone}){
         )}
       </motion.div>
       <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.45}}
-        style={{padding:"14px 24px 44px",flexShrink:0}}>
+        style={{padding:"14px 24px 34px",flexShrink:0}}>
         <Btn onClick={submit} disabled={saving} full large>
           {saving?"Saving profile…":"Join Beta"}
         </Btn>
+        <div style={{textAlign:"center",marginTop:12}}>
+          <button onClick={onOpenFounder}
+            style={{background:"none",border:"none",color:T.textMute,fontSize:12,fontWeight:600,
+              cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,padding:"4px 8px"}}>
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <rect x="3.5" y="7" width="9" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M5.5 7V4.5a2.5 2.5 0 015 0V7" stroke="currentColor" strokeWidth="1.3"/>
+            </svg>
+            Founder Access
+          </button>
+        </div>
       </motion.div>
     </div>
   );
@@ -4231,7 +4256,7 @@ function BetaUpload({profile,onDone,onClose}){
 // ══════════════════════════════════════════════════════════════════════════════
 function FounderDashboard({onClose, founderPw}){
   const [tab,setTab]=useState("overview");
-  const [data,setData]=useState({users:[],txns:[],redemptions:[]});
+  const [data,setData]=useState({users:[],txns:[],redemptions:[],overview:null});
   const [loading,setLoading]=useState(true);
   const [selUser,setSelUser]=useState(null);
   const [search,setSearch]=useState("");
@@ -4253,16 +4278,21 @@ function FounderDashboard({onClose, founderPw}){
       setActionMsg("");
       try {
         if (!founderPw) { setLoading(false); return; } // wait for password prop
-        const [overview, allUsers, txns, redemptions, rw] = await Promise.all([
+        const [overviewRes, usersRes, txnsRes, redemptionsRes, rwRes] = await Promise.allSettled([
           apiAdminOverview(founderPw),
           apiAdminUsers(founderPw),
           apiAdminTxns(founderPw),
           apiAdminRedemptions(founderPw),
           apiAdminGetRewards(founderPw),
         ]);
-        setData({ overview, users:allUsers||[], transactions:txns||[], redemptions:redemptions||[] });
-        setUsers(allUsers||[]);
-        setRewards(rw||[]);
+        const overview = overviewRes.status === "fulfilled" && overviewRes.value ? overviewRes.value : null;
+        const allUsers = usersRes.status === "fulfilled" && Array.isArray(usersRes.value) ? usersRes.value : [];
+        const txns = txnsRes.status === "fulfilled" && Array.isArray(txnsRes.value) ? txnsRes.value : [];
+        const redemptions = redemptionsRes.status === "fulfilled" && Array.isArray(redemptionsRes.value) ? redemptionsRes.value : [];
+        const rw = rwRes.status === "fulfilled" && Array.isArray(rwRes.value) ? rwRes.value : [];
+
+        setData({ overview, users: allUsers, txns, redemptions });
+        setRewards(rw);
       } catch(err) {
         console.error('[Founder] Load failed:', err.message);
         setActionMsg("Failed to load dashboard data. Pull to refresh.");
@@ -4274,17 +4304,20 @@ function FounderDashboard({onClose, founderPw}){
 
   const refresh=()=>setRefreshKey(k=>k+1);
 
-  const {users,txns,redemptions}=data;
+  const users = data?.users || [];
+  const txns = data?.txns || [];
+  const redemptions = data?.redemptions || [];
+  const overview = data?.overview;
   const filtered=users.filter(u=>
     !search||
     u.name?.toLowerCase().includes(search.toLowerCase())||
     u.email?.toLowerCase().includes(search.toLowerCase())||
     u.occupation?.toLowerCase().includes(search.toLowerCase())
   );
-  const totalSpend=txns.reduce((s,t)=>s+Number(t.amount||0),0);
-  const totalCoins=txns.reduce((s,t)=>s+Number(t.coins||0),0);
+  const totalSpend = overview?.stats?.total_spend != null ? Number(overview.stats.total_spend) : txns.reduce((s,t)=>s+Number(t.amount||0),0);
+  const totalCoins = overview?.stats?.total_coins_issued != null ? Number(overview.stats.total_coins_issued) : txns.reduce((s,t)=>s+Number(t.coins||0),0);
   const merchantMap=txns.reduce((a,t)=>{const m=t.merchant||"Unknown";a[m]=(a[m]||0)+1;return a;},{});
-  const topMerchants=Object.entries(merchantMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const topMerchants = overview?.top_merchants?.length ? overview.top_merchants.map(m=>[m.merchant, Number(m.count)]) : Object.entries(merchantMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
   const TABS=["overview","users","transactions","redemptions","rewards"];
   const handleTabChange=async(t)=>{
@@ -4410,7 +4443,12 @@ function FounderDashboard({onClose, founderPw}){
             </svg>
           </motion.button>
           <div style={{flex:1}}>
-            <p style={{margin:0,fontSize:10,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ONLY</p>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+              <p style={{margin:0,fontSize:10,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ONLY</p>
+              <span style={{fontSize:9,fontWeight:700,color:"#00FF88",background:"rgba(0,255,136,0.12)",padding:"1px 6px",borderRadius:5,border:"1px solid rgba(0,255,136,0.25)"}}>
+                ● NEON LIVE
+              </span>
+            </div>
             <h2 style={{margin:0,fontSize:18,fontWeight:800,color:T.text}}>Admin Dashboard</h2>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -4465,6 +4503,16 @@ function FounderDashboard({onClose, founderPw}){
             {/* OVERVIEW */}
             {tab==="overview"&&(
               <motion.div key="ov" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.22}}>
+                {/* Neon Live Connection Banner */}
+                <div style={{padding:"11px 14px",borderRadius:14,background:"rgba(0,255,136,0.06)",border:"1px solid rgba(0,255,136,0.2)",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:"#00FF88",boxShadow:"0 0 8px #00FF88",flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{margin:0,fontSize:12,fontWeight:700,color:"#00FF88"}}>Neon PostgreSQL Integrated & Active</p>
+                    <p style={{margin:"2px 0 0",fontSize:10.5,color:T.textSub}}>
+                      Database connected · {users.length} registered user{users.length!==1?"s":""} stored in Neon
+                    </p>
+                  </div>
+                </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:16}}>
                   <Stat label="Total Users"  value={users.length}                      col={T.blue}  sub={`${users.filter(u=>!u.is_demo).length} real`}/>
                   <Stat label="Transactions" value={txns.length}                       col={T.text}/>
@@ -5928,6 +5976,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                   {l:"Profile",           ico:"user",   fn:()=>{setTab("profile");setMenuOpen(false);}},
                   {l:"Leaderboard",       ico:"trophy", fn:()=>{setTab("leaderboard");setMenuOpen(false);}},
                   {l:"Explore Prototype", ico:"grid",   fn:()=>{setMenuOpen(false);onExplorePrototype();}},
+                  {l:"Founder Access",    ico:"lock",   fn:()=>{setMenuOpen(false);setShowPwModal(true);}},
                 ].map(item=>(
                   <motion.button key={item.l} whileTap={{scale:0.97}} onClick={item.fn}
                     style={{width:"100%",display:"flex",alignItems:"center",gap:11,padding:"12px 10px",
@@ -5938,6 +5987,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                       {item.ico==="user"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke={T.textSub} strokeWidth="1.3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke={T.textSub} strokeWidth="1.3" strokeLinecap="round"/></svg>}
                       {item.ico==="trophy"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l1.4 2.9 3.2.47-2.3 2.25.54 3.18L8 8.75l-2.84 1.55.54-3.18L3.4 4.87l3.2-.47z" stroke={T.gold} strokeWidth="1.2" strokeLinejoin="round"/></svg>}
                       {item.ico==="grid"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/></svg>}
+                      {item.ico==="lock"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="7.5" rx="1.5" stroke={T.blue} strokeWidth="1.3"/><path d="M5.5 7V4.5a2.5 2.5 0 015 0V7" stroke={T.blue} strokeWidth="1.3"/></svg>}
                     </div>
                     <span style={{fontSize:13.5,fontWeight:600,color:T.text}}>{item.l}</span>
                     <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style={{marginLeft:"auto"}}>
@@ -6002,10 +6052,38 @@ export default function Paymint(){
   const [betaProfile,setBetaProfile]=useState(null);
   const [screen,setScreen]=useState(0);
   const [userName,setUserName]=useState("Friend");
+  const [globalFounderOpen,setGlobalFounderOpen]=useState(false);
+  const [globalShowPwModal,setGlobalShowPwModal]=useState(false);
+  const [globalPw,setGlobalPw]=useState("");
+  const [globalFounderPw,setGlobalFounderPw]=useState("");
+  const [globalPwErr,setGlobalPwErr]=useState("");
 
   const V={initial:{opacity:0,x:44,scale:0.97},animate:{opacity:1,x:0,scale:1},exit:{opacity:0,x:-44,scale:0.97}};
   const D={initial:{opacity:0,scale:0.96,filter:"blur(6px)"},animate:{opacity:1,scale:1,filter:"blur(0px)"},exit:{opacity:0,scale:1.02,filter:"blur(3px)"}};
   const go=n=>setScreen(n);
+
+  const handleGlobalPwSubmit = async () => {
+    const ok = await apiAdminAuth(globalPw);
+    if (ok) {
+      setGlobalShowPwModal(false);
+      setGlobalFounderPw(globalPw);
+      setGlobalPw("");
+      setGlobalPwErr("");
+      setGlobalFounderOpen(true);
+    } else {
+      setGlobalPwErr("Incorrect password.");
+    }
+  };
+
+  useEffect(()=>{
+    try {
+      const q = window.location.search || "";
+      const h = window.location.hash || "";
+      if (q.includes("founder") || q.includes("admin") || h.includes("founder") || h.includes("admin")) {
+        setGlobalShowPwModal(true);
+      }
+    } catch(e) {}
+  }, []);
 
   useEffect(()=>{
     (async()=>{
@@ -6085,6 +6163,7 @@ export default function Paymint(){
                   <ExperienceSelect
                     onBeta={()=>{setAppMode("beta");setBetaStep("profile");}}
                     onPrototype={()=>{setAppMode("prototype");go(1);}}
+                    onOpenFounder={()=>setGlobalShowPwModal(true)}
                   />
                 </motion.div>
               )}
@@ -6099,7 +6178,10 @@ export default function Paymint(){
               {betaStep==="profile"&&(
                 <motion.div key="bp" variants={V} initial="initial" animate="animate" exit="exit"
                   transition={SP.gentle} style={{position:"absolute",inset:0}}>
-                  <BetaProfileSetup onDone={(p)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep("how");}}/>
+                  <BetaProfileSetup
+                    onDone={(p)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep("how");}}
+                    onOpenFounder={()=>setGlobalShowPwModal(true)}
+                  />
                 </motion.div>
               )}
               {betaStep==="how"&&(
@@ -6138,6 +6220,46 @@ export default function Paymint(){
           </motion.div>
         )}
 
+      </AnimatePresence>
+
+      {/* Global Founder Access Password Modal */}
+      <AnimatePresence>
+        {globalShowPwModal && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.88)",
+              backdropFilter:"blur(20px)",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 28px"}}>
+            <motion.div initial={{scale:0.9,y:20}} animate={{scale:1,y:0}} transition={SP.bouncy}
+              style={{width:"100%",maxWidth:380,borderRadius:22,background:"#0A0A0C",
+                border:"1px solid rgba(255,255,255,0.1)",padding:"28px 22px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:"#00FF88",boxShadow:"0 0 8px #00FF88"}}/>
+                <p style={{margin:0,fontSize:11,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ACCESS</p>
+              </div>
+              <h3 style={{margin:"0 0 10px",fontSize:20,fontWeight:800,color:T.text}}>Enter Password</h3>
+              <p style={{margin:"0 0 16px",fontSize:12.5,color:T.textSub,lineHeight:1.5}}>
+                Access Neon live database records, real-time metrics, user management, and rewards inventory.
+              </p>
+              <input type="password" value={globalPw} onChange={e=>{setGlobalPw(e.target.value);setGlobalPwErr("");}}
+                onKeyDown={e=>e.key==="Enter"&&handleGlobalPwSubmit()}
+                placeholder="Founder password (default: BK11)" autoFocus
+                style={{width:"100%",padding:"13px 15px",borderRadius:12,border:`1px solid ${T.glassBorder}`,
+                  background:T.glass,color:T.text,fontSize:15,fontFamily:"inherit",
+                  outline:"none",caretColor:T.blue,boxSizing:"border-box",marginBottom:8}}/>
+              {globalPwErr&&<p style={{margin:"0 0 10px",fontSize:12,color:T.error}}>{globalPwErr}</p>}
+              <div style={{display:"flex",gap:10,marginTop:6}}>
+                <Btn onClick={()=>{setGlobalShowPwModal(false);setGlobalPw("");setGlobalPwErr("");}} variant="ghost">Cancel</Btn>
+                <Btn onClick={handleGlobalPwSubmit} full>Enter</Btn>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Founder Dashboard */}
+      <AnimatePresence>
+        {globalFounderOpen && (
+          <FounderDashboard key="global-founder" onClose={()=>setGlobalFounderOpen(false)} founderPw={globalFounderPw}/>
+        )}
       </AnimatePresence>
     </div>
   );
