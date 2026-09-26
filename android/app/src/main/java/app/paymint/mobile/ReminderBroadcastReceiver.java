@@ -19,23 +19,23 @@ public class ReminderBroadcastReceiver extends BroadcastReceiver {
 
     private static class NotificationTemplate {
         String title;
-        String bodyTemplate;
+        String body;
 
-        NotificationTemplate(String title, String bodyTemplate) {
+        NotificationTemplate(String title, String body) {
             this.title = title;
-            this.bodyTemplate = bodyTemplate;
+            this.body = body;
         }
     }
 
-    // 30-Minute Follow-up Templates (Rotational)
+    // 30-Minute Follow-up Clean Rotational Templates
     private static final NotificationTemplate[] REMINDER_TEMPLATES = {
         new NotificationTemplate(
             "Kuchu puchu tum kaha ho...",
-            "Screenshot upload karna Bhul gaye ?? (?%s coins waiting!)"
+            "Screenshot upload karna Bhul gaye ??"
         ),
         new NotificationTemplate(
-            "Dost jaisa, screenshot waisa - kabhi time pe nahi ??",
-            "30 mins hogaye! ?%s ka screenshot upload kardo abhi ??"
+            "Dost jaisa, screenshot waisa -",
+            "kabhi time pe nahi ??"
         )
     };
 
@@ -46,7 +46,6 @@ public class ReminderBroadcastReceiver extends BroadcastReceiver {
         String merchant = intent.getStringExtra("merchant");
         String appLabel = intent.getStringExtra("app");
 
-        // Check if user already uploaded screenshot
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         boolean isUploaded = prefs.getBoolean(KEY_PREFIX_UPLOADED + txKey, false);
 
@@ -79,25 +78,17 @@ public class ReminderBroadcastReceiver extends BroadcastReceiver {
             PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
 
-        // Rotational selection for 30-min reminder
         int lastIndex = prefs.getInt(KEY_REMINDER_ROTATION_INDEX, -1);
         int nextIndex = (lastIndex + 1) % REMINDER_TEMPLATES.length;
         prefs.edit().putInt(KEY_REMINDER_ROTATION_INDEX, nextIndex).apply();
 
         NotificationTemplate template = REMINDER_TEMPLATES[nextIndex];
-        String notifTitle = template.title;
-        String notifBody;
-        try {
-            notifBody = String.format(template.bodyTemplate, amount);
-        } catch (Exception e) {
-            notifBody = "Screenshot upload karna Bhul gaye ?? (?" + amount + " coins waiting!)";
-        }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(notifTitle)
-            .setContentText(notifBody)
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(notifBody))
+            .setContentTitle(template.title)
+            .setContentText(template.body)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(template.body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pi);
