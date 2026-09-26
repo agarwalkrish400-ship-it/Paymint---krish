@@ -11,16 +11,18 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class PaymentNotificationListener extends NotificationListenerService {
     private static final String TAG = "PaymintPaymentListener";
     private static final String CHANNEL_ID = "paymint_payment_alerts";
+    private static final Random random = new Random();
 
     // Known UPI / Payment App Packages
     private static final String[] PAYMENT_PACKAGES = {
-        "com.google.android.apps.nbu.paisa.user", // Google Pay (Tez)
+        "com.google.android.apps.nbu.paisa.user", // Google Pay
         "com.phonepe.app",                       // PhonePe
         "net.one97.paytm",                        // Paytm
         "in.org.npci.upiapp",                     // BHIM
@@ -29,7 +31,6 @@ public class PaymentNotificationListener extends NotificationListenerService {
         "com.amazon.mShop.android.shopping"       // Amazon Pay
     };
 
-    // Regex for payment detections (INR / Rs / ?)
     private static final Pattern AMOUNT_PATTERN = Pattern.compile(
         "(?:(?:Rs\\.?|INR|?)\\s*([0-9,]+(?:\\.[0-9]{1,2})?))|(?:(?:paid|sent|debited)\\s*(?:Rs\\.?|INR|?)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?))",
         Pattern.CASE_INSENSITIVE
@@ -39,6 +40,35 @@ public class PaymentNotificationListener extends NotificationListenerService {
         "(?:to|at|for)\\s+([A-Za-z0-9\\s&'\\.-]{2,30})",
         Pattern.CASE_INSENSITIVE
     );
+
+    private static class NotificationTemplate {
+        String title;
+        String bodyTemplate;
+
+        NotificationTemplate(String title, String bodyTemplate) {
+            this.title = title;
+            this.bodyTemplate = bodyTemplate;
+        }
+    }
+
+    private static final NotificationTemplate[] TEMPLATES = {
+        new NotificationTemplate(
+            "Payment hogaya kuchu puchu ab Screenshot bhi upload kardo ??",
+            "?%s paid via %s! Tap to claim coins ??"
+        ),
+        new NotificationTemplate(
+            "Khula hain aao aake daldo...",
+            "Payment ka screenshot aur kya ?? (?%s via %s)"
+        ),
+        new NotificationTemplate(
+            "Usne tumhe nahi Diya to kya hua hum dege tumhe... Rewards",
+            "Ek baar daalke to dekho ... Screenshot ?? (?%s)"
+        ),
+        new NotificationTemplate(
+            "Laal phool Neela phool ??",
+            "Paymint tumhara rewardfull! Upload screenshot for ?%s ?"
+        )
+    };
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
@@ -68,16 +98,14 @@ public class PaymentNotificationListener extends NotificationListenerService {
         String text = textCs != null ? textCs.toString() : "";
         String fullContent = title + " " + text;
 
-        Log.d(TAG, "Notification received from " + appLabel + ": " + fullContent);
+        Log.d(TAG, "Notification from " + appLabel + ": " + fullContent);
 
-        // Check if this looks like a debit / outgoing payment
         String lower = fullContent.toLowerCase();
         boolean isDebit = lower.contains("paid") || lower.contains("sent") || lower.contains("debited") || 
                           lower.contains("transfer") || lower.contains("successful") || lower.contains("to ");
 
         if (!isDebit) return;
 
-        // Parse amount
         String amount = null;
         Matcher amtMatcher = AMOUNT_PATTERN.matcher(fullContent);
         if (amtMatcher.find()) {
@@ -85,8 +113,7 @@ public class PaymentNotificationListener extends NotificationListenerService {
             if (amount != null) amount = amount.replace(",", "").trim();
         }
 
-        // Parse merchant/payee
-        String merchant = "Merchant";
+        String merchant = "Store";
         Matcher merchMatcher = MERCHANT_PATTERN.matcher(fullContent);
         if (merchMatcher.find()) {
             merchant = merchMatcher.group(1).trim();
@@ -107,11 +134,10 @@ public class PaymentNotificationListener extends NotificationListenerService {
                 "Paymint Payment Reminders",
                 NotificationManager.IMPORTANCE_HIGH
             );
-            channel.setDescription("Reminds you to upload proof and earn coins after payments");
+            channel.setDescription("Reminds you to upload screenshot after payments");
             nm.createNotificationChannel(channel);
         }
 
-        // Deep link into Paymint with prefilled amount & merchant
         Intent intent = new Intent(context, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         intent.setAction(Intent.ACTION_VIEW);
@@ -124,13 +150,21 @@ public class PaymentNotificationListener extends NotificationListenerService {
             PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
 
-        String notifTitle = "?? Paid ?" + amount + " via " + appLabel + "?";
-        String notifBody = "Tap here to upload proof & earn Paymint reward coins!";
+        // Pick one of the creative templates randomly
+        NotificationTemplate template = TEMPLATES[random.nextInt(TEMPLATES.length)];
+        String notifTitle = template.title;
+        String notifBody;
+        try {
+            notifBody = String.format(template.bodyTemplate, amount, appLabel);
+        } catch (Exception e) {
+            notifBody = "?" + amount + " paid via " + appLabel + "! Tap to claim coins ??";
+        }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(notifTitle)
             .setContentText(notifBody)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(notifBody))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pi);
