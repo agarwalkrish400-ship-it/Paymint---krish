@@ -5,20 +5,21 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
-import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class PaymentNotificationListener extends NotificationListenerService {
     private static final String TAG = "PaymintPaymentListener";
     private static final String CHANNEL_ID = "paymint_payment_alerts";
-    private static final Random random = new Random();
+    private static final String PREFS_NAME = "paymint_notif_prefs";
+    private static final String KEY_ROTATION_INDEX = "last_rotation_index";
 
     // Known UPI / Payment App Packages
     private static final String[] PAYMENT_PACKAGES = {
@@ -51,7 +52,8 @@ public class PaymentNotificationListener extends NotificationListenerService {
         }
     }
 
-    private static final NotificationTemplate[] TEMPLATES = {
+    // 4 Creative templates cycled in strict rotation
+    private static final NotificationTemplate[] ROTATING_TEMPLATES = {
         new NotificationTemplate(
             "Payment hogaya kuchu puchu ab Screenshot bhi upload kardo ??",
             "?%s paid via %s! Tap to claim coins ??"
@@ -150,8 +152,13 @@ public class PaymentNotificationListener extends NotificationListenerService {
             PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
 
-        // Pick one of the creative templates randomly
-        NotificationTemplate template = TEMPLATES[random.nextInt(TEMPLATES.length)];
+        // Strict round-robin rotation stored across app sessions
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        int lastIndex = prefs.getInt(KEY_ROTATION_INDEX, -1);
+        int nextIndex = (lastIndex + 1) % ROTATING_TEMPLATES.length;
+        prefs.edit().putInt(KEY_ROTATION_INDEX, nextIndex).apply();
+
+        NotificationTemplate template = ROTATING_TEMPLATES[nextIndex];
         String notifTitle = template.title;
         String notifBody;
         try {
