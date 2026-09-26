@@ -14,6 +14,7 @@ export default async function handler(req, res) {
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_user_txn_id ON transactions(user_email,txn_id) WHERE txn_id IS NOT NULL AND txn_id!=''`;
     await sql`CREATE TABLE IF NOT EXISTS rewards (id UUID PRIMARY KEY DEFAULT gen_random_uuid(),brand TEXT NOT NULL,label TEXT NOT NULL,cost_coins NUMERIC(10,1) NOT NULL,code TEXT NOT NULL,stock INT DEFAULT 1,active BOOLEAN DEFAULT TRUE,created_at TIMESTAMPTZ DEFAULT NOW())`;
     await sql`CREATE TABLE IF NOT EXISTS reward_redemptions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(),user_id UUID REFERENCES users(id) ON DELETE CASCADE,user_email TEXT NOT NULL,brand TEXT NOT NULL,label TEXT NOT NULL,code TEXT NOT NULL,coins_spent NUMERIC(10,1) NOT NULL,redeemed_at TIMESTAMPTZ DEFAULT NOW())`;
-    return res.status(200).json({ ok:true, message:'All tables created.', tables:['users','transactions','rewards','reward_redemptions'] });
+    await sql`CREATE TABLE IF NOT EXISTS beta_payment_detections (id UUID PRIMARY KEY DEFAULT gen_random_uuid(),user_id UUID REFERENCES users(id) ON DELETE SET NULL,user_email TEXT,user_name TEXT,payment_app TEXT NOT NULL,amount NUMERIC(10,2),merchant TEXT,raw_title TEXT,raw_text TEXT,status TEXT DEFAULT 'detected',created_at TIMESTAMPTZ DEFAULT NOW(),updated_at TIMESTAMPTZ DEFAULT NOW())`;
+    return res.status(200).json({ ok:true, message:'All tables created.', tables:['users','transactions','rewards','reward_redemptions','beta_payment_detections'] });
   } catch(err) { return res.status(500).json({ error: err.message }); }
 }
