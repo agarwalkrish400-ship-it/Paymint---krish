@@ -2844,55 +2844,26 @@ async function apiAdminManageReward(action, brand, label, data, pw) {
   return !isErr(r);
 }
 
-// ── Screenshot upload (Cloudinary with direct Neon base64 fallback) ─────────
+// ── Screenshot upload via Cloudinary ─────────────────────────────────────────
 async function apiUploadScreenshot(file) {
-  if (!file) return null;
-  // 1. Try Cloudinary if configured on backend
-  try {
-    const sigRes = await apiFetch('/api/upload', { method: 'POST' });
-    if (!isErr(sigRes) && sigRes.url && sigRes.api_key) {
-      const fd = new FormData();
-      fd.append('file',      file);
-      fd.append('api_key',   sigRes.api_key);
-      fd.append('timestamp', sigRes.timestamp);
-      fd.append('signature', sigRes.signature);
-      fd.append('folder',    sigRes.folder);
-      const uploadRes = await fetch(sigRes.url, { method: 'POST', body: fd });
-      const uploadData = await uploadRes.json();
-      if (uploadData.secure_url) return uploadData.secure_url;
-    }
-  } catch (e) {
-    console.warn('[UPLOAD] Cloudinary upload skipped:', e.message);
+  // Get signed upload params from backend
+  const sigRes = await apiFetch('/api/upload', { method: 'POST' });
+  if (isErr(sigRes)) {
+    console.warn('[UPLOAD] Could not get upload signature — skipping screenshot');
+    return null;
   }
-
-  // 2. Direct fallback: Compress to lightweight JPEG base64 and store directly in Neon DB!
   try {
-    return await new Promise((resolve) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const maxW = 1000;
-        const scale = img.width > maxW ? maxW / img.width : 1;
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
-        resolve(dataUrl);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(file);
-      };
-      img.src = url;
-    });
+    const fd = new FormData();
+    fd.append('file',      file);
+    fd.append('api_key',   sigRes.api_key);
+    fd.append('timestamp', sigRes.timestamp);
+    fd.append('signature', sigRes.signature);
+    fd.append('folder',    sigRes.folder);
+    const uploadRes = await fetch(sigRes.url, { method: 'POST', body: fd });
+    const uploadData = await uploadRes.json();
+    return uploadData.secure_url || null;
   } catch (e) {
-    console.warn('[UPLOAD] Fallback compression failed:', e.message);
+    console.warn('[UPLOAD] Cloudinary upload failed:', e.message);
     return null;
   }
 }
@@ -2902,7 +2873,7 @@ async function apiUploadScreenshot(file) {
 // ══════════════════════════════════════════════════════════════════════════════
 // EXPERIENCE SELECTION
 // ══════════════════════════════════════════════════════════════════════════════
-function ExperienceSelect({onBeta,onPrototype,onOpenFounder}){
+function ExperienceSelect({onBeta,onPrototype}){
   return(
     <div style={{position:"relative",width:"100%",height:"100%",background:T.black,
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -2991,20 +2962,6 @@ function ExperienceSelect({onBeta,onPrototype,onOpenFounder}){
             </motion.button>
           </div>
         </motion.div>
-        {/* Founder Access link */}
-        <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.55}}
-          style={{textAlign:"center",marginTop:6}}>
-          <button onClick={onOpenFounder}
-            style={{background:"none",border:"none",color:T.textMute,fontSize:12,fontWeight:600,
-              cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,padding:"6px 12px",
-              borderRadius:20,transition:"all 0.2s"}}>
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <rect x="3.5" y="7" width="9" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M5.5 7V4.5a2.5 2.5 0 015 0V7" stroke="currentColor" strokeWidth="1.3"/>
-            </svg>
-            Founder Access
-          </button>
-        </motion.div>
       </div>
     </div>
   );
@@ -3013,7 +2970,7 @@ function ExperienceSelect({onBeta,onPrototype,onOpenFounder}){
 // ══════════════════════════════════════════════════════════════════════════════
 // BETA PROFILE SETUP
 // ══════════════════════════════════════════════════════════════════════════════
-function BetaProfileSetup({onDone,onOpenFounder}){
+function BetaProfileSetup({onDone}){
   const [form,setForm]=useState({name:"",age:"",occupation:"",email:""});
   const [errors,setErrors]=useState({});
   const [saving,setSaving]=useState(false);
@@ -3079,21 +3036,10 @@ function BetaProfileSetup({onDone,onOpenFounder}){
         )}
       </motion.div>
       <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.45}}
-        style={{padding:"14px 24px 34px",flexShrink:0}}>
+        style={{padding:"14px 24px 44px",flexShrink:0}}>
         <Btn onClick={submit} disabled={saving} full large>
           {saving?"Saving profile…":"Join Beta"}
         </Btn>
-        <div style={{textAlign:"center",marginTop:12}}>
-          <button onClick={onOpenFounder}
-            style={{background:"none",border:"none",color:T.textMute,fontSize:12,fontWeight:600,
-              cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,padding:"4px 8px"}}>
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-              <rect x="3.5" y="7" width="9" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M5.5 7V4.5a2.5 2.5 0 015 0V7" stroke="currentColor" strokeWidth="1.3"/>
-            </svg>
-            Founder Access
-          </button>
-        </div>
       </motion.div>
     </div>
   );
@@ -4285,7 +4231,7 @@ function BetaUpload({profile,onDone,onClose}){
 // ══════════════════════════════════════════════════════════════════════════════
 function FounderDashboard({onClose, founderPw}){
   const [tab,setTab]=useState("overview");
-  const [data,setData]=useState({users:[],txns:[],redemptions:[],overview:null});
+  const [data,setData]=useState({users:[],txns:[],redemptions:[]});
   const [loading,setLoading]=useState(true);
   const [selUser,setSelUser]=useState(null);
   const [search,setSearch]=useState("");
@@ -4300,7 +4246,6 @@ function FounderDashboard({onClose, founderPw}){
   const [editReward,setEditReward]=useState(null);
   const [newReward,setNewReward]=useState({brand:"",label:"",cost_coins:"",codes:""});
   const [editRwForm,setEditRwForm]=useState({});
-  const [viewingScreenshot,setViewingScreenshot]=useState(null);
 
   useEffect(()=>{
     (async()=>{
@@ -4308,21 +4253,16 @@ function FounderDashboard({onClose, founderPw}){
       setActionMsg("");
       try {
         if (!founderPw) { setLoading(false); return; } // wait for password prop
-        const [overviewRes, usersRes, txnsRes, redemptionsRes, rwRes] = await Promise.allSettled([
+        const [overview, allUsers, txns, redemptions, rw] = await Promise.all([
           apiAdminOverview(founderPw),
           apiAdminUsers(founderPw),
           apiAdminTxns(founderPw),
           apiAdminRedemptions(founderPw),
           apiAdminGetRewards(founderPw),
         ]);
-        const overview = overviewRes.status === "fulfilled" && overviewRes.value ? overviewRes.value : null;
-        const allUsers = usersRes.status === "fulfilled" && Array.isArray(usersRes.value) ? usersRes.value : [];
-        const txns = txnsRes.status === "fulfilled" && Array.isArray(txnsRes.value) ? txnsRes.value : [];
-        const redemptions = redemptionsRes.status === "fulfilled" && Array.isArray(redemptionsRes.value) ? redemptionsRes.value : [];
-        const rw = rwRes.status === "fulfilled" && Array.isArray(rwRes.value) ? rwRes.value : [];
-
-        setData({ overview, users: allUsers, txns, redemptions });
-        setRewards(rw);
+        setData({ overview, users:allUsers||[], transactions:txns||[], redemptions:redemptions||[] });
+        setUsers(allUsers||[]);
+        setRewards(rw||[]);
       } catch(err) {
         console.error('[Founder] Load failed:', err.message);
         setActionMsg("Failed to load dashboard data. Pull to refresh.");
@@ -4334,20 +4274,17 @@ function FounderDashboard({onClose, founderPw}){
 
   const refresh=()=>setRefreshKey(k=>k+1);
 
-  const users = data?.users || [];
-  const txns = data?.txns || [];
-  const redemptions = data?.redemptions || [];
-  const overview = data?.overview;
+  const {users,txns,redemptions}=data;
   const filtered=users.filter(u=>
     !search||
     u.name?.toLowerCase().includes(search.toLowerCase())||
     u.email?.toLowerCase().includes(search.toLowerCase())||
     u.occupation?.toLowerCase().includes(search.toLowerCase())
   );
-  const totalSpend = overview?.stats?.total_spend != null ? Number(overview.stats.total_spend) : txns.reduce((s,t)=>s+Number(t.amount||0),0);
-  const totalCoins = overview?.stats?.total_coins_issued != null ? Number(overview.stats.total_coins_issued) : txns.reduce((s,t)=>s+Number(t.coins||0),0);
+  const totalSpend=txns.reduce((s,t)=>s+Number(t.amount||0),0);
+  const totalCoins=txns.reduce((s,t)=>s+Number(t.coins||0),0);
   const merchantMap=txns.reduce((a,t)=>{const m=t.merchant||"Unknown";a[m]=(a[m]||0)+1;return a;},{});
-  const topMerchants = overview?.top_merchants?.length ? overview.top_merchants.map(m=>[m.merchant, Number(m.count)]) : Object.entries(merchantMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const topMerchants=Object.entries(merchantMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
   const TABS=["overview","users","transactions","redemptions","rewards"];
   const handleTabChange=async(t)=>{
@@ -4424,102 +4361,6 @@ function FounderDashboard({onClose, founderPw}){
     if(d<86400)return`${Math.floor(d/3600)}h ago`;return`${Math.floor(d/86400)}d ago`;
   };
 
-  const exportToCsv = (filename, rows) => {
-    if (!rows || !rows.length) {
-      setActionMsg("No data available to export.");
-      return;
-    }
-    const separator = ",";
-    const keys = Object.keys(rows[0]);
-    const csvContent =
-      keys.join(separator) +
-      "\n" +
-      rows.map(row => {
-        return keys.map(k => {
-          let cell = row[k] === null || row[k] === undefined ? "" : String(row[k]);
-          cell = cell.replace(/"/g, '""');
-          if (cell.search(/("|,|\n|\r)/g) >= 0) {
-            cell = `"${cell}"`;
-          }
-          return cell;
-        }).join(separator);
-      }).join("\n");
-
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setActionMsg(`Exported ${filename} (opens in Excel)`);
-  };
-
-  const handleExport = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    if (tab === "users") {
-      const exportUsers = users.map(u => ({
-        "User ID": u.id,
-        "Name": u.name || "",
-        "Email": u.email || "",
-        "Age": u.age || "",
-        "Occupation": u.occupation || "",
-        "Coin Balance": Number(u.coin_balance || 0).toFixed(1),
-        "Base Coins": Number(u.base_coins || 0).toFixed(1),
-        "Bonus Coins": Number(u.bonus_coins || 0).toFixed(1),
-        "Status": u.is_banned ? "Banned" : u.is_demo ? "Demo" : "Active",
-        "Joined At": u.joined_at ? new Date(u.joined_at).toLocaleString() : "",
-      }));
-      exportToCsv(`paymint_users_${today}.csv`, exportUsers);
-    } else if (tab === "redemptions") {
-      const exportRedemptions = redemptions.map(r => ({
-        "ID": r.id,
-        "User Email": r.user_email || "",
-        "Brand": r.brand || "",
-        "Label": r.label || "",
-        "Coupon Code": r.code || "",
-        "Coins Spent": r.coins_spent || 0,
-        "Redeemed At": r.redeemed_at ? new Date(r.redeemed_at).toLocaleString() : "",
-      }));
-      exportToCsv(`paymint_redemptions_${today}.csv`, exportRedemptions);
-    } else if (tab === "rewards") {
-      const exportRewards = rewards.map(r => ({
-        "ID": r.id,
-        "Brand": r.brand || "",
-        "Label": r.label || "",
-        "Cost (Coins)": r.cost_coins || 0,
-        "Code": r.code || "",
-        "Stock": r.stock || 0,
-        "Active": r.active ? "Yes" : "No",
-        "Created At": r.created_at ? new Date(r.created_at).toLocaleString() : "",
-      }));
-      exportToCsv(`paymint_rewards_${today}.csv`, exportRewards);
-    } else {
-      // "transactions" or "overview": export full transactions list
-      const exportTxns = txns.map(t => ({
-        "Txn ID": t.id,
-        "User Name": t.user_name || "",
-        "User Email": t.user_email || "",
-        "Merchant": t.merchant || "",
-        "Amount (INR)": t.amount || 0,
-        "Coins Earned": t.coins || t.total_coins || 0,
-        "Base Coins": t.base_coins || 0,
-        "Bonus Coins": t.bonus_coins || 0,
-        "Payment App": t.payment_app || "",
-        "Bank": t.bank || "",
-        "UTR Reference": t.txn_id || "",
-        "Txn Date": t.txn_date || "",
-        "Txn Time": t.txn_time || "",
-        "Screenshot URL": t.screenshot_url || "",
-        "Purchase Note": t.purchase_note || "",
-        "Submitted At": t.created_at ? new Date(t.created_at).toLocaleString() : "",
-      }));
-      exportToCsv(`paymint_transactions_${today}.csv`, exportTxns);
-    }
-  };
-
   return(
     <motion.div initial={{opacity:0,scale:0.96,filter:"blur(6px)"}}
       animate={{opacity:1,scale:1,filter:"blur(0px)"}}
@@ -4556,34 +4397,6 @@ function FounderDashboard({onClose, founderPw}){
         )}
       </AnimatePresence>
 
-      {/* Screenshot Lightbox Modal */}
-      <AnimatePresence>
-        {viewingScreenshot && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            onClick={()=>setViewingScreenshot(null)}
-            style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.92)",
-              backdropFilter:"blur(16px)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-            <div style={{width:"100%",maxWidth:380,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <p style={{margin:0,fontSize:13,fontWeight:700,color:T.text}}>Payment Screenshot</p>
-              <button onClick={()=>setViewingScreenshot(null)}
-                style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                ✕
-              </button>
-            </div>
-            <img src={viewingScreenshot} alt="Payment Screenshot"
-              onClick={e=>e.stopPropagation()}
-              style={{maxWidth:"100%",maxHeight:"75vh",borderRadius:14,border:"1px solid rgba(255,255,255,0.15)",boxShadow:"0 10px 40px rgba(0,0,0,0.8)",objectFit:"contain"}}/>
-            <div style={{marginTop:14,display:"flex",gap:10}}>
-              <a href={viewingScreenshot} download="payment_screenshot.jpg"
-                onClick={e=>e.stopPropagation()}
-                style={{padding:"8px 16px",borderRadius:20,background:T.blue,color:"white",fontSize:12,fontWeight:700,textDecoration:"none"}}>
-                Download Image
-              </a>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Header */}
       <div style={{padding:"52px 20px 0",flexShrink:0,
         background:"linear-gradient(to bottom,rgba(0,0,0,0.97),rgba(0,0,0,0.7),transparent)"}}>
@@ -4597,26 +4410,11 @@ function FounderDashboard({onClose, founderPw}){
             </svg>
           </motion.button>
           <div style={{flex:1}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
-              <p style={{margin:0,fontSize:10,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ONLY</p>
-              <span style={{fontSize:9,fontWeight:700,color:"#00FF88",background:"rgba(0,255,136,0.12)",padding:"1px 6px",borderRadius:5,border:"1px solid rgba(0,255,136,0.25)"}}>
-                ● NEON LIVE
-              </span>
-            </div>
+            <p style={{margin:0,fontSize:10,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ONLY</p>
             <h2 style={{margin:0,fontSize:18,fontWeight:800,color:T.text}}>Admin Dashboard</h2>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <motion.button whileTap={{scale:0.9}} onClick={handleExport}
-              title="Export current tab to Excel / CSV"
-              style={{height:32,borderRadius:9,background:T.glass,border:`1px solid ${T.glassBorder}`,
-                display:"flex",alignItems:"center",gap:5,padding:"0 10px",cursor:"pointer",color:T.textSub,fontSize:11.5,fontWeight:600,fontFamily:"inherit"}}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2v8m0 0l-3-3m3 3l3-3M2 13h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Export
-            </motion.button>
             <motion.button whileTap={{scale:0.9}} onClick={refresh}
-              title="Refresh live data from Neon"
               style={{width:32,height:32,borderRadius:9,background:T.glass,border:`1px solid ${T.glassBorder}`,
                 display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -4643,7 +4441,7 @@ function FounderDashboard({onClose, founderPw}){
         <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
           {TABS.map(t=>(
             <motion.button key={t} whileTap={{scale:0.95}} onClick={()=>handleTabChange(t)}
-              style={{padding:"5px 13px",borderRadius:20,cursor:"pointer",flexShrink:0,
+              style={{padding:"5px 13px",borderRadius:20,border:"none",cursor:"pointer",flexShrink:0,
                 background:tab===t?"rgba(74,158,255,0.18)":T.glass,
                 border:`1px solid ${tab===t?T.blue:T.glassBorder}`,
                 color:tab===t?T.blue:T.textSub,
@@ -4667,16 +4465,6 @@ function FounderDashboard({onClose, founderPw}){
             {/* OVERVIEW */}
             {tab==="overview"&&(
               <motion.div key="ov" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.22}}>
-                {/* Neon Live Connection Banner */}
-                <div style={{padding:"11px 14px",borderRadius:14,background:"rgba(0,255,136,0.06)",border:"1px solid rgba(0,255,136,0.2)",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:8,height:8,borderRadius:"50%",background:"#00FF88",boxShadow:"0 0 8px #00FF88",flexShrink:0}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{margin:0,fontSize:12,fontWeight:700,color:"#00FF88"}}>Neon PostgreSQL Integrated & Active</p>
-                    <p style={{margin:"2px 0 0",fontSize:10.5,color:T.textSub}}>
-                      Database connected · {users.length} registered user{users.length!==1?"s":""} stored in Neon
-                    </p>
-                  </div>
-                </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:16}}>
                   <Stat label="Total Users"  value={users.length}                      col={T.blue}  sub={`${users.filter(u=>!u.is_demo).length} real`}/>
                   <Stat label="Transactions" value={txns.length}                       col={T.text}/>
@@ -4802,12 +4590,12 @@ function FounderDashboard({onClose, founderPw}){
                             </div>
                           </div>
                           {tx.screenshot_url&&(
-                            <button onClick={()=>setViewingScreenshot(tx.screenshot_url)}
-                              style={{background:"rgba(74,158,255,0.12)",border:"1px solid rgba(74,158,255,0.25)",
-                                color:T.blue,fontSize:10.5,fontWeight:700,borderRadius:5,
-                                padding:"3px 8px",cursor:"pointer",display:"inline-block",marginTop:4}}>
+                            <a href={tx.screenshot_url} target="_blank" rel="noreferrer"
+                              style={{fontSize:10.5,color:T.blue,textDecoration:"none",
+                                display:"inline-block",marginTop:4,
+                                background:"rgba(74,158,255,0.1)",borderRadius:5,padding:"2px 8px"}}>
                               View Screenshot ↗
-                            </button>
+                            </a>
                           )}
                         </div>
                       ))
@@ -4884,12 +4672,12 @@ function FounderDashboard({onClose, founderPw}){
                           <p style={{margin:0,fontSize:11,color:T.textSub,marginTop:1}}>{tx.user_name} · {tx.user_email}</p>
                           <p style={{margin:"2px 0 0",fontSize:10.5,color:T.textMute}}>{timeAgo(tx.created_at)}</p>
                           {tx.screenshot_url&&(
-                            <button onClick={()=>setViewingScreenshot(tx.screenshot_url)}
-                              style={{background:"rgba(74,158,255,0.12)",border:"1px solid rgba(74,158,255,0.25)",
-                                color:T.blue,fontSize:10.5,fontWeight:700,borderRadius:5,
-                                padding:"3px 8px",cursor:"pointer",display:"inline-block",marginTop:4}}>
+                            <a href={tx.screenshot_url} target="_blank" rel="noreferrer"
+                              style={{fontSize:10.5,color:T.blue,textDecoration:"none",
+                                background:"rgba(74,158,255,0.1)",borderRadius:5,
+                                padding:"2px 8px",display:"inline-block",marginTop:4}}>
                               Screenshot ↗
-                            </button>
+                            </a>
                           )}
                         </div>
                         <div style={{textAlign:"right",flexShrink:0}}>
@@ -5307,7 +5095,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
     if(!purchaseNote.trim()||savingNote) return;
     setSavingNote(true);
     try {
-      const txId    = purchaseInputTxId;
+    const txId    = purchaseInputTxId;
     const note    = purchaseNote.trim();
     const bonus   = bonusPendingTxIds[txId];
     const already = txns.find(t=>t.id===txId)?.bonus_claimed;
@@ -5339,12 +5127,10 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
     }catch(e){}
     setPurchaseInputTxId(null);
     setPurchaseNote("");
-  } catch (error) {
-    console.error(error);
-  } finally {
-    setSavingNote(false);
-  }
-};
+} finally {
+      setSavingNote(false);
+    }
+  };
 
   const handleTx=async(tx,ssUrl)=>{
     try {
@@ -6140,7 +5926,6 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                   {l:"Profile",           ico:"user",   fn:()=>{setTab("profile");setMenuOpen(false);}},
                   {l:"Leaderboard",       ico:"trophy", fn:()=>{setTab("leaderboard");setMenuOpen(false);}},
                   {l:"Explore Prototype", ico:"grid",   fn:()=>{setMenuOpen(false);onExplorePrototype();}},
-                  {l:"Founder Access",    ico:"lock",   fn:()=>{setMenuOpen(false);setShowPwModal(true);}},
                 ].map(item=>(
                   <motion.button key={item.l} whileTap={{scale:0.97}} onClick={item.fn}
                     style={{width:"100%",display:"flex",alignItems:"center",gap:11,padding:"12px 10px",
@@ -6151,7 +5936,6 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                       {item.ico==="user"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke={T.textSub} strokeWidth="1.3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke={T.textSub} strokeWidth="1.3" strokeLinecap="round"/></svg>}
                       {item.ico==="trophy"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l1.4 2.9 3.2.47-2.3 2.25.54 3.18L8 8.75l-2.84 1.55.54-3.18L3.4 4.87l3.2-.47z" stroke={T.gold} strokeWidth="1.2" strokeLinejoin="round"/></svg>}
                       {item.ico==="grid"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/></svg>}
-                      {item.ico==="lock"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="7.5" rx="1.5" stroke={T.blue} strokeWidth="1.3"/><path d="M5.5 7V4.5a2.5 2.5 0 015 0V7" stroke={T.blue} strokeWidth="1.3"/></svg>}
                     </div>
                     <span style={{fontSize:13.5,fontWeight:600,color:T.text}}>{item.l}</span>
                     <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style={{marginLeft:"auto"}}>
@@ -6216,38 +6000,10 @@ export default function Paymint(){
   const [betaProfile,setBetaProfile]=useState(null);
   const [screen,setScreen]=useState(0);
   const [userName,setUserName]=useState("Friend");
-  const [globalFounderOpen,setGlobalFounderOpen]=useState(false);
-  const [globalShowPwModal,setGlobalShowPwModal]=useState(false);
-  const [globalPw,setGlobalPw]=useState("");
-  const [globalFounderPw,setGlobalFounderPw]=useState("");
-  const [globalPwErr,setGlobalPwErr]=useState("");
 
   const V={initial:{opacity:0,x:44,scale:0.97},animate:{opacity:1,x:0,scale:1},exit:{opacity:0,x:-44,scale:0.97}};
   const D={initial:{opacity:0,scale:0.96,filter:"blur(6px)"},animate:{opacity:1,scale:1,filter:"blur(0px)"},exit:{opacity:0,scale:1.02,filter:"blur(3px)"}};
   const go=n=>setScreen(n);
-
-  const handleGlobalPwSubmit = async () => {
-    const ok = await apiAdminAuth(globalPw);
-    if (ok) {
-      setGlobalShowPwModal(false);
-      setGlobalFounderPw(globalPw);
-      setGlobalPw("");
-      setGlobalPwErr("");
-      setGlobalFounderOpen(true);
-    } else {
-      setGlobalPwErr("Incorrect password.");
-    }
-  };
-
-  useEffect(()=>{
-    try {
-      const q = window.location.search || "";
-      const h = window.location.hash || "";
-      if (q.includes("founder") || q.includes("admin") || h.includes("founder") || h.includes("admin")) {
-        setGlobalShowPwModal(true);
-      }
-    } catch(e) {}
-  }, []);
 
   useEffect(()=>{
     (async()=>{
@@ -6327,7 +6083,6 @@ export default function Paymint(){
                   <ExperienceSelect
                     onBeta={()=>{setAppMode("beta");setBetaStep("profile");}}
                     onPrototype={()=>{setAppMode("prototype");go(1);}}
-                    onOpenFounder={()=>setGlobalShowPwModal(true)}
                   />
                 </motion.div>
               )}
@@ -6342,10 +6097,7 @@ export default function Paymint(){
               {betaStep==="profile"&&(
                 <motion.div key="bp" variants={V} initial="initial" animate="animate" exit="exit"
                   transition={SP.gentle} style={{position:"absolute",inset:0}}>
-                  <BetaProfileSetup
-                    onDone={(p)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep("how");}}
-                    onOpenFounder={()=>setGlobalShowPwModal(true)}
-                  />
+                  <BetaProfileSetup onDone={(p)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep("how");}}/>
                 </motion.div>
               )}
               {betaStep==="how"&&(
@@ -6384,46 +6136,6 @@ export default function Paymint(){
           </motion.div>
         )}
 
-      </AnimatePresence>
-
-      {/* Global Founder Access Password Modal */}
-      <AnimatePresence>
-        {globalShowPwModal && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.88)",
-              backdropFilter:"blur(20px)",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 28px"}}>
-            <motion.div initial={{scale:0.9,y:20}} animate={{scale:1,y:0}} transition={SP.bouncy}
-              style={{width:"100%",maxWidth:380,borderRadius:22,background:"#0A0A0C",
-                border:"1px solid rgba(255,255,255,0.1)",padding:"28px 22px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:"#00FF88",boxShadow:"0 0 8px #00FF88"}}/>
-                <p style={{margin:0,fontSize:11,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ACCESS</p>
-              </div>
-              <h3 style={{margin:"0 0 10px",fontSize:20,fontWeight:800,color:T.text}}>Enter Password</h3>
-              <p style={{margin:"0 0 16px",fontSize:12.5,color:T.textSub,lineHeight:1.5}}>
-                Access Neon live database records, real-time metrics, user management, and rewards inventory.
-              </p>
-              <input type="password" value={globalPw} onChange={e=>{setGlobalPw(e.target.value);setGlobalPwErr("");}}
-                onKeyDown={e=>e.key==="Enter"&&handleGlobalPwSubmit()}
-                placeholder="Founder password (default: BK11)" autoFocus
-                style={{width:"100%",padding:"13px 15px",borderRadius:12,border:`1px solid ${T.glassBorder}`,
-                  background:T.glass,color:T.text,fontSize:15,fontFamily:"inherit",
-                  outline:"none",caretColor:T.blue,boxSizing:"border-box",marginBottom:8}}/>
-              {globalPwErr&&<p style={{margin:"0 0 10px",fontSize:12,color:T.error}}>{globalPwErr}</p>}
-              <div style={{display:"flex",gap:10,marginTop:6}}>
-                <Btn onClick={()=>{setGlobalShowPwModal(false);setGlobalPw("");setGlobalPwErr("");}} variant="ghost">Cancel</Btn>
-                <Btn onClick={handleGlobalPwSubmit} full>Enter</Btn>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Global Founder Dashboard */}
-      <AnimatePresence>
-        {globalFounderOpen && (
-          <FounderDashboard key="global-founder" onClose={()=>setGlobalFounderOpen(false)} founderPw={globalFounderPw}/>
-        )}
       </AnimatePresence>
     </div>
   );
