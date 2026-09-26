@@ -53,7 +53,7 @@ public class PaymentNotificationListener extends NotificationListenerService {
         }
     }
 
-    // 4 Creative templates cycled in strict rotation
+    // 7 Creative Immediate Notification Templates (Strict Rotational Basis)
     private static final NotificationTemplate[] ROTATING_TEMPLATES = {
         new NotificationTemplate(
             "Payment hogaya kuchu puchu ab Screenshot bhi upload kardo ??",
@@ -70,6 +70,18 @@ public class PaymentNotificationListener extends NotificationListenerService {
         new NotificationTemplate(
             "Laal phool Neela phool ??",
             "Paymint tumhara rewardfull! Upload screenshot for ?%s ?"
+        ),
+        new NotificationTemplate(
+            "Ek photo, ek reward. Deal? ????",
+            "?%s paid via %s! Screenshot upload karo aur reward paao ??"
+        ),
+        new NotificationTemplate(
+            "Screenshot naa bheja toh reward bhi ghost kar dega... ??",
+            "?%s payment detected! Jaldi upload karo warna chala jayega ??"
+        ),
+        new NotificationTemplate(
+            "Paisa gaya, ab reward bhi jaane doge? (nahi na?)??",
+            "?%s spent at %s. Screenshot upload karke coins claim karo ?"
         )
     };
 
@@ -164,7 +176,7 @@ public class PaymentNotificationListener extends NotificationListenerService {
         String notifTitle = template.title;
         String notifBody;
         try {
-            notifBody = String.format(template.bodyTemplate, amount, appLabel);
+            notifBody = String.format(template.bodyTemplate, amount, appLabel.equals("UPI") ? merchant : appLabel);
         } catch (Exception e) {
             notifBody = "?" + amount + " paid via " + appLabel + "! Tap to claim coins ??";
         }
