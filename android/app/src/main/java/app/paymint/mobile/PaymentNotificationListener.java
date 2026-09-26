@@ -1,5 +1,6 @@
 package app.paymint.mobile;
 
+import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -18,8 +19,8 @@ import java.util.regex.Pattern;
 public class PaymentNotificationListener extends NotificationListenerService {
     private static final String TAG = "PaymintPaymentListener";
     private static final String CHANNEL_ID = "paymint_payment_alerts";
-    private static final String PREFS_NAME = "paymint_notif_prefs";
-    private static final String KEY_ROTATION_INDEX = "last_rotation_index";
+    public static final String PREFS_NAME = "paymint_notif_prefs";
+    public static final String KEY_ROTATION_INDEX = "last_rotation_index";
 
     // Known UPI / Payment App Packages
     private static final String[] PAYMENT_PACKAGES = {
@@ -123,6 +124,7 @@ public class PaymentNotificationListener extends NotificationListenerService {
 
         if (amount != null && !amount.isEmpty()) {
             showReminderNotification(this, appLabel, amount, merchant, title, text);
+            schedule30MinReminder(this, appLabel, amount, merchant);
         }
     }
 
@@ -177,5 +179,39 @@ public class PaymentNotificationListener extends NotificationListenerService {
             .setContentIntent(pi);
 
         nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
+    }
+
+    private void schedule30MinReminder(Context context, String appLabel, String amount, String merchant) {
+        try {
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+
+            String txKey = amount + "_" + merchant + "_" + System.currentTimeMillis();
+
+            Intent reminderIntent = new Intent(context, ReminderBroadcastReceiver.class);
+            reminderIntent.putExtra("tx_key", txKey);
+            reminderIntent.putExtra("amount", amount);
+            reminderIntent.putExtra("merchant", merchant);
+            reminderIntent.putExtra("app", appLabel);
+
+            int requestCode = (int) (System.currentTimeMillis() % 100000);
+            PendingIntent pi = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                reminderIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+            );
+
+            // 30 minutes in milliseconds (30 * 60 * 1000)
+            long triggerAt = System.currentTimeMillis() + (30 * 60 * 1000L);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+            } else {
+                am.set(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to schedule 30 min reminder", e);
+        }
     }
 }
