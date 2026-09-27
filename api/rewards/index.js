@@ -5,8 +5,28 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   const sql = getDb();
   if (req.method === 'GET') {
-    if (!authUser(req)) return res.status(401).json({ error: 'Unauthorised' });
+    const founder = isFounder(req);
+    const user = authUser(req);
+    if (!founder && !user) return res.status(401).json({ error: 'Unauthorised' });
     try {
+      if (founder) {
+        // Founder gets all individual reward items or grouped overview
+        const rows = await sql`
+          SELECT id, brand, label, cost_coins, code, stock, active, created_at
+          FROM rewards
+          ORDER BY created_at DESC, brand, label`;
+        return res.status(200).json(rows.map(r=>({
+          id: r.id,
+          brand: r.brand,
+          label: r.label,
+          cost_coins: Number(r.cost_coins),
+          code: r.code,
+          stock: Number(r.stock),
+          active: !!r.active,
+          created_at: r.created_at
+        })));
+      }
+
       const rows = await sql`
         SELECT brand,label,cost_coins,
           COUNT(*) FILTER (WHERE active AND stock>0) AS available

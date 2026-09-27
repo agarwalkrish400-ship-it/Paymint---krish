@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { BrandLogoBadge, RewardStoreView, FounderRewardsTab } from "./RewardsSystem";
 
 // ─── TOKENS ───────────────────────────────────────────────────────────────────
 const T = {
@@ -4441,7 +4442,7 @@ function FounderDashboard({onClose, founderPw}){
         <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
           {TABS.map(t=>(
             <motion.button key={t} whileTap={{scale:0.95}} onClick={()=>handleTabChange(t)}
-              style={{padding:"5px 13px",borderRadius:20,border:"none",cursor:"pointer",flexShrink:0,
+              style={{padding:"5px 13px",borderRadius:20,cursor:"pointer",flexShrink:0,
                 background:tab===t?"rgba(74,158,255,0.18)":T.glass,
                 border:`1px solid ${tab===t?T.blue:T.glassBorder}`,
                 color:tab===t?T.blue:T.textSub,
@@ -4717,273 +4718,28 @@ function FounderDashboard({onClose, founderPw}){
               </motion.div>
             )}
 
-            {/* REWARDS MANAGER */}
+            {/* REWARDS MANAGER & DESIGN STUDIO */}
             {tab==="rewards"&&(
               <motion.div key="rw" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.22}}>
-
-                {/* Add / Edit modal */}
-                <AnimatePresence>
-                  {(showAddReward||editReward)&&(
-                    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-                      style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.88)",
-                        backdropFilter:"blur(16px)",display:"flex",alignItems:"center",
-                        justifyContent:"center",padding:"0 20px"}}>
-                      <motion.div initial={{scale:0.9,y:20}} animate={{scale:1,y:0}} transition={SP.bouncy}
-                        style={{width:"100%",maxWidth:400,borderRadius:20,background:"#0A0A0C",
-                          border:"1px solid rgba(255,255,255,0.1)",padding:"24px 20px",
-                          maxHeight:"85vh",overflowY:"auto"}}>
-                        <h3 style={{margin:"0 0 16px",fontSize:18,fontWeight:800,color:T.text}}>
-                          {editReward?"Edit Reward":"Add Reward"}
-                        </h3>
-                        {editReward?(
-                          // Edit form
-                          <>
-                            {[["Brand",      "brand"],
-                              ["Label",      "label"],
-                              ["Coins Cost", "cost_coins"],
-                            ].map(([lbl,key])=>(
-                              <div key={key} style={{marginBottom:12}}>
-                                <p style={{margin:"0 0 5px",fontSize:11,color:T.textMute,fontWeight:600,
-                                  textTransform:"uppercase",letterSpacing:"0.07em"}}>{lbl}</p>
-                                <input value={editRwForm[key]||""} onChange={e=>setEditRwForm(f=>({...f,[key]:e.target.value}))}
-                                  style={{width:"100%",padding:"10px 13px",borderRadius:10,
-                                    border:`1px solid ${T.glassBorder}`,background:T.glass,
-                                    color:T.text,fontSize:14,fontFamily:"inherit",
-                                    outline:"none",caretColor:T.blue,boxSizing:"border-box"}}/>
-                              </div>
-                            ))}
-                            <div style={{marginBottom:12}}>
-                              <p style={{margin:"0 0 5px",fontSize:11,color:T.textMute,fontWeight:600,
-                                textTransform:"uppercase",letterSpacing:"0.07em"}}>Add More Codes (one per line)</p>
-                              <textarea value={editRwForm.newCodes||""} onChange={e=>setEditRwForm(f=>({...f,newCodes:e.target.value}))}
-                                rows={4} placeholder={"CODE1\nCODE2\nCODE3"}
-                                style={{width:"100%",padding:"10px 13px",borderRadius:10,
-                                  border:`1px solid ${T.glassBorder}`,background:T.glass,
-                                  color:T.text,fontSize:13,fontFamily:"monospace",resize:"vertical",
-                                  outline:"none",caretColor:T.blue,boxSizing:"border-box"}}/>
-                            </div>
-                            <div style={{display:"flex",gap:10,marginTop:16}}>
-                              <motion.button whileTap={{scale:0.96}} onClick={()=>{setEditReward(null);setEditRwForm({});}}
-                                style={{flex:1,padding:"11px",borderRadius:12,background:T.glass,
-                                  border:`1px solid ${T.glassBorder}`,color:T.textSub,
-                                  fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                                Cancel
-                              </motion.button>
-                              <motion.button whileTap={{scale:0.96}} onClick={async()=>{
-                                  setRewardsLoading(true);
-                                  // Update all codes in this group (same brand+label)
-                                  const allForGroup = await apiAdminGetRewards(founderPw);
-                                  const groupRows = allForGroup.filter(r=>
-                                    r.brand===editReward.brand && r.label===editReward.label
-                                  );
-                                  await apiAdminManageReward("update",editReward.brand,editReward.label,{newBrand:editRwForm.brand,newLabel:editRwForm.label,newCost:Number(editRwForm.cost_coins)},founderPw);
-                                  if(editRwForm.newCodes&&editRwForm.newCodes.trim()){
-                                    const codes=editRwForm.newCodes.split("\n").map(c=>c.trim()).filter(Boolean);
-                                    if(codes.length>0) await apiAdminBulkAddCodes(editRwForm.brand,editRwForm.label,Number(editRwForm.cost_coins),codes,founderPw);
-                                  }
-                                  const rw=await apiAdminGetRewards(founderPw); setRewards(rw);
-                                  setEditReward(null); setEditRwForm({}); setRewardsLoading(false);
-                                  setActionMsg("Reward updated.");
-                                }}
-                                style={{flex:2,padding:"11px",borderRadius:12,
-                                  background:`linear-gradient(135deg,${T.blue},${T.blueDeep})`,
-                                  border:"none",color:"white",fontSize:13,fontWeight:700,
-                                  fontFamily:"inherit",cursor:"pointer"}}>
-                                Save Changes
-                              </motion.button>
-                            </div>
-                          </>
-                        ):(
-                          // Add form
-                          <>
-                            {[["Brand (e.g. Amazon)","brand"],
-                              ["Label (e.g. ₹100 Voucher)","label"],
-                              ["Cost in Coins","cost_coins"],
-                            ].map(([lbl,key])=>(
-                              <div key={key} style={{marginBottom:12}}>
-                                <p style={{margin:"0 0 5px",fontSize:11,color:T.textMute,fontWeight:600,
-                                  textTransform:"uppercase",letterSpacing:"0.07em"}}>{lbl}</p>
-                                <input value={newReward[key]||""} onChange={e=>setNewReward(f=>({...f,[key]:e.target.value}))}
-                                  style={{width:"100%",padding:"10px 13px",borderRadius:10,
-                                    border:`1px solid ${T.glassBorder}`,background:T.glass,
-                                    color:T.text,fontSize:14,fontFamily:"inherit",
-                                    outline:"none",caretColor:T.blue,boxSizing:"border-box"}}/>
-                              </div>
-                            ))}
-                            <div style={{marginBottom:12}}>
-                              <p style={{margin:"0 0 5px",fontSize:11,color:T.textMute,fontWeight:600,
-                                textTransform:"uppercase",letterSpacing:"0.07em"}}>Coupon Codes (one per line)</p>
-                              <textarea value={newReward.codes} onChange={e=>setNewReward(f=>({...f,codes:e.target.value}))}
-                                rows={5} placeholder={"AMZN-XXXX-1\nAMZN-XXXX-2\nAMZN-XXXX-3"}
-                                style={{width:"100%",padding:"10px 13px",borderRadius:10,
-                                  border:`1px solid ${T.glassBorder}`,background:T.glass,
-                                  color:T.text,fontSize:13,fontFamily:"monospace",resize:"vertical",
-                                  outline:"none",caretColor:T.blue,boxSizing:"border-box"}}/>
-                              <p style={{margin:"5px 0 0",fontSize:11,color:T.textMute}}>
-                                Each line = one code. Stock = number of codes pasted.
-                              </p>
-                            </div>
-                            <div style={{display:"flex",gap:10,marginTop:16}}>
-                              <motion.button whileTap={{scale:0.96}} onClick={()=>{setShowAddReward(false);setNewReward({brand:"",label:"",cost_coins:"",codes:""}); }}
-                                style={{flex:1,padding:"11px",borderRadius:12,background:T.glass,
-                                  border:`1px solid ${T.glassBorder}`,color:T.textSub,
-                                  fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                                Cancel
-                              </motion.button>
-                              <motion.button whileTap={{scale:0.96}} onClick={async()=>{
-                                  if(!newReward.brand||!newReward.label||!newReward.cost_coins||!newReward.codes.trim()){
-                                    setActionMsg("Fill all fields and add at least one code."); return;
-                                  }
-                                  setRewardsLoading(true);
-                                  const codes=newReward.codes.split("\n").map(c=>c.trim()).filter(Boolean);
-                                  await apiAdminBulkAddCodes(newReward.brand, newReward.label, Number(newReward.cost_coins), codes, founderPw);
-                                  const rw=await apiAdminGetRewards(founderPw); setRewards(rw);
-                                  setShowAddReward(false);
-                                  setNewReward({brand:"",label:"",cost_coins:"",codes:""});
-                                  setRewardsLoading(false);
-                                  setActionMsg(`Added ${codes.length} code${codes.length!==1?"s":""} for ${newReward.brand}.`);
-                                }}
-                                style={{flex:2,padding:"11px",borderRadius:12,
-                                  background:`linear-gradient(135deg,${T.blue},${T.blueDeep})`,
-                                  border:"none",color:"white",fontSize:13,fontWeight:700,
-                                  fontFamily:"inherit",cursor:"pointer"}}>
-                                Add Codes
-                              </motion.button>
-                            </div>
-                          </>
-                        )}
-                      </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Header row */}
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-                  <div>
-                    <p style={{margin:0,fontSize:13,fontWeight:700,color:T.text}}>Reward Inventory</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:T.textMute}}>
-                      {rewards.filter(r=>r.active).length} active · {rewards.length} total codes
-                    </p>
-                  </div>
-                  <motion.button whileTap={{scale:0.94}} onClick={()=>setShowAddReward(true)}
-                    style={{padding:"8px 14px",borderRadius:20,
-                      background:`linear-gradient(135deg,${T.blue},${T.blueDeep})`,
-                      border:"none",color:"white",fontSize:12,fontWeight:700,
-                      fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
-                    + Add Reward
-                  </motion.button>
-                </div>
-
-                {rewardsLoading?(
-                  <div style={{textAlign:"center",paddingTop:32}}>
-                    <motion.div animate={{rotate:360}} transition={{duration:1.4,repeat:Infinity,ease:"linear"}}
-                      style={{width:32,height:32,borderRadius:"50%",border:`2px solid ${T.blue}`,
-                        borderTopColor:"transparent",margin:"0 auto"}}/>
-                  </div>
-                ):rewards.length===0?(
-                  <div style={{textAlign:"center",paddingTop:32}}>
-                    <p style={{margin:0,fontSize:13.5,color:T.textMute,lineHeight:1.7}}>
-                      {"No rewards yet.\nClick \"+ Add Reward\" to upload your first batch of coupon codes."}
-                    </p>
-                  </div>
-                ):(
-                  (() => {
-                    // Group by brand+label for display
-                    const grouped = {};
-                    rewards.forEach(r => {
-                      const key = r.brand + "||" + r.label + "||" + r.cost_coins;
-                      if (!grouped[key]) grouped[key] = { brand:r.brand, label:r.label, cost_coins:r.cost_coins, active:0, total:0, codes:[] };
-                      grouped[key].total++;
-                      if (r.active && r.stock > 0) grouped[key].active++;
-                      grouped[key].codes.push(r);
-                    });
-                    return Object.values(grouped).map((g, gi) => (
-                      <div key={gi} style={{borderRadius:16,padding:"15px 16px",marginBottom:10,
-                        background: g.active > 0 ? "rgba(74,158,255,0.05)" : "rgba(255,255,255,0.02)",
-                        border:`1px solid ${g.active>0?"rgba(74,158,255,0.2)":T.glassBorder}`}}>
-                        <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                          <div style={{width:40,height:40,borderRadius:11,flexShrink:0,
-                            background:g.active>0?"rgba(74,158,255,0.12)":"rgba(255,255,255,0.04)",
-                            border:`1px solid ${g.active>0?"rgba(74,158,255,0.25)":T.glassBorder}`,
-                            display:"flex",alignItems:"center",justifyContent:"center"}}>
-                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                              <rect x="2" y="7" width="16" height="11" rx="2.5" stroke={g.active>0?T.blue:T.textMute} strokeWidth="1.4"/>
-                              <path d="M6 7V5a4 4 0 018 0v2" stroke={g.active>0?T.blue:T.textMute} strokeWidth="1.4" strokeLinecap="round"/>
-                            </svg>
-                          </div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
-                              <p style={{margin:0,fontSize:14,fontWeight:700,color:g.active>0?T.text:"rgba(242,242,247,0.45)"}}>
-                                {g.brand}
-                              </p>
-                              <p style={{margin:0,fontSize:12,color:T.textSub}}>— {g.label}</p>
-                              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
-                                color:g.active>0?"#00FF88":"rgba(255,255,255,0.3)",
-                                background:g.active>0?"rgba(0,255,136,0.1)":"rgba(255,255,255,0.04)",
-                                border:`1px solid ${g.active>0?"rgba(0,255,136,0.25)":"rgba(255,255,255,0.08)"}`}}>
-                                {g.active>0?"ACTIVE":"OUT OF STOCK"}
-                              </span>
-                            </div>
-                            <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:10}}>
-                              <p style={{margin:0,fontSize:12,color:T.textSub}}>
-                                <span style={{fontWeight:700,color:g.active>0?T.blue:T.textMute}}>{g.active}</span>
-                                <span style={{color:T.textMute}}> / {g.total} remaining</span>
-                              </p>
-                              <p style={{margin:0,fontSize:12,color:T.gold,fontWeight:600}}>{g.cost_coins} coins</p>
-                            </div>
-                            {/* Stock bar */}
-                            <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:4,overflow:"hidden",marginBottom:12}}>
-                              <div style={{height:"100%",borderRadius:4,
-                                background:g.active>0?`linear-gradient(90deg,${T.blue},#90CAFF)`:"rgba(255,255,255,0.1)",
-                                width:`${g.total>0?(g.active/g.total)*100:0}%`,transition:"width 0.5s ease"}}/>
-                            </div>
-                            {/* Action buttons */}
-                            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                              <motion.button whileTap={{scale:0.94}}
-                                onClick={()=>{ setEditRwForm({brand:g.brand,label:g.label,cost_coins:String(g.cost_coins),newCodes:""}); setEditReward(g.codes[0]); }}
-                                style={{padding:"6px 12px",borderRadius:10,background:"rgba(74,158,255,0.1)",
-                                  border:"1px solid rgba(74,158,255,0.2)",color:T.blue,
-                                  fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                                Edit / Add Codes
-                              </motion.button>
-                              <motion.button whileTap={{scale:0.94}}
-                                onClick={async()=>{
-                                  setRewardsLoading(true);
-                                  // Toggle active on all codes in this group
-                                  const newActive = g.active > 0 ? false : true;
-                                  await Promise.all(g.codes.filter(c=>c.stock>0).map(c=>apiFetch("/api/rewards/manage",{method:"PATCH",founderPw,body:{action:"toggle",brand:g.brand,label:g.label,active:newActive}},{},founderPw)));
-                                  const rw=await apiAdminGetRewards(founderPw); setRewards(rw);
-                                  setRewardsLoading(false);
-                                  setActionMsg(`${g.brand} ${newActive?"activated":"deactivated"}.`);
-                                }}
-                                style={{padding:"6px 12px",borderRadius:10,
-                                  background:g.active>0?"rgba(255,96,88,0.08)":"rgba(0,255,136,0.08)",
-                                  border:`1px solid ${g.active>0?"rgba(255,96,88,0.2)":"rgba(0,255,136,0.2)"}`,
-                                  color:g.active>0?T.error:"#00FF88",
-                                  fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                                {g.active>0?"Deactivate":"Activate"}
-                              </motion.button>
-                              <motion.button whileTap={{scale:0.94}}
-                                onClick={async()=>{
-                                  if(!window.confirm(`Delete ALL ${g.total} code(s) for ${g.brand} ${g.label}? This cannot be undone.`)) return;
-                                  setRewardsLoading(true);
-                                  await apiAdminManageReward("delete",g.brand,g.label,{},founderPw);
-                                  const rw=await apiAdminGetRewards(founderPw); setRewards(rw);
-                                  setRewardsLoading(false);
-                                  setActionMsg(`Deleted all codes for ${g.brand}.`);
-                                }}
-                                style={{padding:"6px 12px",borderRadius:10,background:"rgba(255,96,88,0.07)",
-                                  border:"1px solid rgba(255,96,88,0.18)",color:T.error,
-                                  fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                                Delete All
-                              </motion.button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ));
-                  })()
-                )}
+                <FounderRewardsTab
+                  rewards={rewards}
+                  rewardsLoading={rewardsLoading}
+                  founderPw={founderPw}
+                  onRefresh={async()=>{
+                    setRewardsLoading(true);
+                    try {
+                      const rw=await apiAdminGetRewards(founderPw);
+                      setRewards(rw||[]);
+                    } catch(err){
+                      console.error("[FounderRewardsTab]", err.message);
+                    } finally {
+                      setRewardsLoading(false);
+                    }
+                  }}
+                  onBulkAddCodes={apiAdminBulkAddCodes}
+                  onManageReward={apiAdminManageReward}
+                  setActionMsg={setActionMsg}
+                />
               </motion.div>
             )}
 
@@ -5661,156 +5417,36 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
             </motion.div>
           )}
 
-          {/* STORE */}
+          {/* REWARD STORE */}
           {tab==="store"&&(
             <motion.div key="bs" initial={{opacity:0,x:28}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-28}}
-              transition={{duration:0.28}} style={{padding:"0 20px 20px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
-                <BackBtn onClick={()=>setTab("home")}/>
-                <div>
-                  <h3 style={{margin:0,fontSize:18,fontWeight:800,color:T.text}}>Reward Store</h3>
-                  <p style={{margin:0,fontSize:11.5,color:T.textMute}}>{coins.toFixed(1)} coins available</p>
-                </div>
-              </div>
-
-              {storeRewards.length===0?(
-                <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.1,...SP.gentle}}
-                  style={{borderRadius:20,padding:"40px 24px",textAlign:"center",
-                    background:"linear-gradient(145deg,rgba(74,158,255,0.06),rgba(74,158,255,0.02))",
-                    border:"1px solid rgba(74,158,255,0.15)"}}>
-                  <motion.div animate={{scale:[1,1.08,1]}} transition={{duration:2.5,repeat:Infinity,ease:"easeInOut"}}
-                    style={{width:56,height:56,borderRadius:18,background:"rgba(74,158,255,0.1)",
-                      border:"1px solid rgba(74,158,255,0.2)",display:"flex",alignItems:"center",
-                      justifyContent:"center",margin:"0 auto 16px"}}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke={T.blue} strokeWidth="1.5" strokeLinejoin="round"/>
-                      <line x1="3" y1="6" x2="21" y2="6" stroke={T.blue} strokeWidth="1.5"/>
-                      <path d="M16 10a4 4 0 01-8 0" stroke={T.blue} strokeWidth="1.5" strokeLinecap="round"/>
-                    </svg>
-                  </motion.div>
-                  <h3 style={{margin:"0 0 8px",fontSize:18,fontWeight:800,color:T.text}}>Rewards Coming Soon</h3>
-                  <p style={{margin:0,fontSize:13.5,color:T.textSub,lineHeight:1.7,whiteSpace:"pre-line"}}>
-                    {"Earn coins by uploading your UPI transactions.\nRewards will be added as the beta grows."}
-                  </p>
-                </motion.div>
-              ):(
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {storeRewards.map((rw,i)=>{
-                    const key=rw.brand+"||"+rw.label;
-                    const isRedeemed=!!redeemedCodes[key];
-                    const canAfford=coins>=rw.cost_coins;
-                    const inStock=rw.available>0;
-                    const isRedeeming=redeemingId===key;
-                    const claimedCode=redeemedCodes[key];
-                    return(
-                      <motion.div key={key}
-                        initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}
-                        transition={{delay:i*0.06,...SP.gentle}}
-                        style={{borderRadius:18,padding:"16px",
-                          background:canAfford&&inStock&&!isRedeemed
-                            ?"linear-gradient(135deg,rgba(74,158,255,0.08),rgba(74,158,255,0.03))"
-                            :"rgba(255,255,255,0.03)",
-                          border:`1px solid ${canAfford&&inStock&&!isRedeemed?"rgba(74,158,255,0.22)":T.glassBorder}`,
-                          position:"relative",overflow:"hidden"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:13}}>
-                          <div style={{width:44,height:44,borderRadius:13,flexShrink:0,
-                            background:canAfford&&inStock?"rgba(74,158,255,0.12)":"rgba(255,255,255,0.04)",
-                            border:`1px solid ${canAfford&&inStock?"rgba(74,158,255,0.22)":T.glassBorder}`,
-                            display:"flex",alignItems:"center",justifyContent:"center"}}>
-                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                              <rect x="2" y="7" width="16" height="11" rx="2.5"
-                                stroke={canAfford&&inStock?T.blue:T.textMute} strokeWidth="1.4"/>
-                              <path d="M6 7V5a4 4 0 018 0v2"
-                                stroke={canAfford&&inStock?T.blue:T.textMute} strokeWidth="1.4" strokeLinecap="round"/>
-                            </svg>
-                          </div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <p style={{margin:0,fontSize:14.5,fontWeight:700,
-                              color:canAfford&&inStock?T.text:"rgba(242,242,247,0.45)"}}>
-                              {rw.brand}
-                            </p>
-                            <p style={{margin:"2px 0 0",fontSize:12,color:T.textMute}}>{rw.label}</p>
-                            {!inStock&&(
-                              <p style={{margin:"4px 0 0",fontSize:11,color:T.error,fontWeight:600}}>Out of stock</p>
-                            )}
-                            {isRedeemed&&claimedCode&&(
-                              <motion.div initial={{opacity:0,y:4}} animate={{opacity:1,y:0}}
-                                style={{marginTop:8,padding:"8px 12px",borderRadius:10,
-                                  background:"rgba(0,255,136,0.08)",
-                                  border:"1px solid rgba(0,255,136,0.2)"}}>
-                                <p style={{margin:"0 0 2px",fontSize:10.5,color:"rgba(0,255,136,0.7)",fontWeight:600,
-                                  letterSpacing:"0.06em",textTransform:"uppercase"}}>Your Code</p>
-                                <p style={{margin:0,fontSize:15,fontWeight:800,color:"#00FF88",
-                                  letterSpacing:"0.08em",fontFamily:"monospace"}}>{claimedCode}</p>
-                              </motion.div>
-                            )}
-                          </div>
-                          <div style={{flexShrink:0,textAlign:"right"}}>
-                            <p style={{margin:"0 0 7px",fontSize:12,fontWeight:700,
-                              color:canAfford?T.blue:T.textMute}}>{rw.cost_coins} coins</p>
-                            {!isRedeemed?(
-                              <motion.button whileTap={{scale:0.93}}
-                                disabled={!canAfford||!inStock||isRedeeming}
-                                onClick={async()=>{
-                                  if(!canAfford||!inStock||isRedeeming)return;
-                                  setRedeemingId(key);
-                                  // Claim reward via API
-                                  let claimed;
-                                  try { claimed=await apiClaimReward(rw.brand,rw.label); }
-                                  catch(e){ showNotif({type:"error",title:"Network Error",sub:"Could not claim. Try again."}); setRedeemingId(null); return; }
-                                  if(!claimed){
-                                    setRedeemingId(null);
-                                    // Refresh store
-                                    const allRw=await apiGetRewards();
-                                    setStoreRewards(allRw);
-                                    return;
-                                  }
-                                  // Use server-returned coin balance
-                                  const newCoins=claimed.coin_balance ?? parseFloat((coins-rw.cost_coins).toFixed(1));
-                                  setCoins(newCoins);
-                                  // Update local state
-                                  setRedeemedCodes(prev=>({...prev,[key]:claimed.code||"CODE_ERROR"}));
-                                  const up={...profile,coin_balance:newCoins};
-                                  await lc.set("beta-profile",up);
-                                  onUpdateProfile(up);
-                                  showNotif({type:"redeem",title:`${rw.brand} Redeemed`,
-                                    sub:`Code: ${claimed.code}`});
-                                  setRedeemingId(null);
-                                  // Refresh store stock
-                                  const allRw2=await apiGetRewards();
-                                  const grp2={};
-                                  allRw2.forEach(r=>{
-                                    const k=r.brand+"||"+r.label;
-                                    if(!grp2[k]) grp2[k]={brand:r.brand,label:r.label,cost_coins:r.cost_coins,available:0};
-                                    if(r.active&&r.stock>0) grp2[k].available++;
-                                  });
-                                  setStoreRewards(Object.values(grp2));
-                                }}
-                                style={{padding:"7px 14px",borderRadius:10,
-                                  background:canAfford&&inStock
-                                    ?`linear-gradient(135deg,${T.blue},${T.blueDeep})`
-                                    :"rgba(255,255,255,0.06)",
-                                  border:"none",cursor:canAfford&&inStock?"pointer":"not-allowed",
-                                  fontSize:12,fontWeight:700,
-                                  color:canAfford&&inStock?"white":"rgba(255,255,255,0.3)",
-                                  fontFamily:"inherit",minWidth:72}}>
-                                {isRedeeming?"…":"Redeem"}
-                              </motion.button>
-                            ):(
-                              <span style={{fontSize:11,fontWeight:700,color:"#00FF88",
-                                background:"rgba(0,255,136,0.1)",
-                                border:"1px solid rgba(0,255,136,0.2)",
-                                padding:"5px 10px",borderRadius:10,display:"inline-block"}}>
-                                Claimed ✓
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              )}
+              transition={{duration:0.28}}>
+              <RewardStoreView
+                coins={coins}
+                totalSpend={txns.reduce((s,t)=>s+Number(t.amount||0),0)}
+                storeRewards={storeRewards}
+                redeemedCodes={redeemedCodes}
+                onBack={()=>setTab("home")}
+                onClaimReward={async(brand,label,cost_coins)=>{
+                  let claimed;
+                  try {
+                    claimed = await apiClaimReward(brand, label, cost_coins);
+                  } catch(e) {
+                    console.error("Redeem API error:", e);
+                  }
+                  const code = claimed?.code || generateSimulationCode(brand);
+                  const newCoins = claimed?.coin_balance ?? Math.max(0, parseFloat((coins - cost_coins).toFixed(1)));
+                  setCoins(newCoins);
+                  const key = brand+"||"+label;
+                  setRedeemedCodes(prev=>({...prev,[key]:code}));
+                  const up = {...profile, coin_balance:newCoins};
+                  await lc.set("beta-profile", up);
+                  onUpdateProfile(up);
+                  showNotif({type:"redeem", title:`${brand} Redeemed`, sub:`Code: ${code}`});
+                  apiGetRewards().then(allRw=>setStoreRewards(allRw)).catch(()=>{});
+                  return { code, coin_balance: newCoins };
+                }}
+              />
             </motion.div>
           )}
 
