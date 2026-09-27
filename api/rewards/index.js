@@ -8,16 +8,29 @@ export default async function handler(req, res) {
     const founder = isFounder(req);
     const user = authUser(req);
     if (!founder && !user) return res.status(401).json({ error: 'Unauthorised' });
+    try {
       const DEFAULT_CATALOG = [
-        { brand: 'Amazon', label: '₹50 Gift Card', cost_coins: 50, codes: ['AMZN-50-A1B2', 'AMZN-50-C3D4', 'AMZN-50-E5F6', 'AMZN-50-G7H8', 'AMZN-50-I9J0'] },
-        { brand: 'Amazon', label: '₹100 Gift Card', cost_coins: 100, codes: ['AMZN-100-K1L2', 'AMZN-100-M3N4', 'AMZN-100-O5P6'] },
-        { brand: 'Flipkart', label: '₹50 Voucher', cost_coins: 50, codes: ['FK-50-Q1R2', 'FK-50-S3T4', 'FK-50-U5V6', 'FK-50-W7X8'] },
-        { brand: 'Swiggy', label: '₹50 Food Voucher', cost_coins: 30, codes: ['SWIG-50-Y1Z2', 'SWIG-50-A3B4', 'SWIG-50-C5D6', 'SWIG-50-E7F8'] },
-        { brand: 'Zomato', label: '₹75 Meal Pass', cost_coins: 45, codes: ['ZOM-75-G1H2', 'ZOM-75-I3J4', 'ZOM-75-K5L6'] },
-        { brand: 'Starbucks', label: '₹100 Beverage Pass', cost_coins: 80, codes: ['SBUX-100-M1N2', 'SBUX-100-O3P4'] },
-        { brand: 'BookMyShow', label: '₹100 Movie Voucher', cost_coins: 70, codes: ['BMS-100-Q1R2', 'BMS-100-S3T4'] },
-        { brand: 'Uber', label: '₹50 Premier Ride Pass', cost_coins: 40, codes: ['UBER-50-U1V2', 'UBER-50-W3X4'] },
-        { brand: 'Myntra', label: '₹150 Shopping Coupon', cost_coins: 90, codes: ['MYN-150-Y1Z2', 'MYN-150-A3B4'] }
+        { brand: 'Netflix', label: '1-Month Mobile Subscription', cost_coins: 1490, codes: ['NFLX-SIM-M101', 'NFLX-SIM-M102', 'NFLX-SIM-M103', 'NFLX-SIM-M104'] },
+        { brand: 'Netflix', label: '1-Month Basic HD Plan', cost_coins: 1990, codes: ['NFLX-SIM-B201', 'NFLX-SIM-B202', 'NFLX-SIM-B203'] },
+        { brand: 'Spotify', label: '1-Month Premium Individual', cost_coins: 1190, codes: ['SPOT-SIM-P101', 'SPOT-SIM-P102', 'SPOT-SIM-P103', 'SPOT-SIM-P104'] },
+        { brand: 'Apple Music', label: '1-Month Individual Plan', cost_coins: 990, codes: ['APPL-SIM-M101', 'APPL-SIM-M102', 'APPL-SIM-M103'] },
+        { brand: 'YouTube Premium', label: '1-Month Ad-Free + YouTube Music', cost_coins: 1490, codes: ['YT-SIM-P101', 'YT-SIM-P102', 'YT-SIM-P103'] },
+        { brand: 'Swiggy', label: '1-Month Swiggy One Membership', cost_coins: 990, codes: ['SWIG-SIM-ONE1', 'SWIG-SIM-ONE2', 'SWIG-SIM-ONE3'] },
+        { brand: 'Zepto', label: '1-Month Zepto Pass', cost_coins: 990, codes: ['ZEPT-SIM-PASS1', 'ZEPT-SIM-PASS2', 'ZEPT-SIM-PASS3'] },
+        { brand: 'Zomato', label: '1-Month Zomato Gold Pass', cost_coins: 990, codes: ['ZOM-SIM-GOLD1', 'ZOM-SIM-GOLD2', 'ZOM-SIM-GOLD3'] },
+        { brand: 'Amazon', label: '₹250 Amazon Pay Gift Card', cost_coins: 2500, codes: ['AMZN-SIM-250A', 'AMZN-SIM-250B', 'AMZN-SIM-250C', 'AMZN-SIM-250D'] },
+        { brand: 'Amazon', label: '₹500 Amazon Pay Gift Card', cost_coins: 5000, codes: ['AMZN-SIM-500A', 'AMZN-SIM-500B', 'AMZN-SIM-500C'] },
+        { brand: 'Blinkit', label: '₹100 Quick Commerce Voucher', cost_coins: 1000, codes: ['BLNK-SIM-100A', 'BLNK-SIM-100B', 'BLNK-SIM-100C'] },
+        { brand: 'Blinkit', label: '₹250 Quick Commerce Voucher', cost_coins: 2500, codes: ['BLNK-SIM-250A', 'BLNK-SIM-250B', 'BLNK-SIM-250C'] },
+        { brand: 'Swiggy', label: '₹200 Food Delivery Voucher', cost_coins: 2000, codes: ['SWIG-SIM-200A', 'SWIG-SIM-200B', 'SWIG-SIM-200C'] },
+        { brand: 'Zomato', label: '₹200 Dining & Delivery Voucher', cost_coins: 2000, codes: ['ZOM-SIM-200A', 'ZOM-SIM-200B', 'ZOM-SIM-200C'] },
+        { brand: 'Myntra', label: '₹300 Fashion Voucher', cost_coins: 3000, codes: ['MYNT-SIM-300A', 'MYNT-SIM-300B', 'MYNT-SIM-300C'] },
+        { brand: 'Flipkart', label: '₹250 Shopping Gift Card', cost_coins: 2500, codes: ['FLIP-SIM-250A', 'FLIP-SIM-250B', 'FLIP-SIM-250C'] },
+        { brand: 'Uber', label: '₹150 Uber Rides Voucher', cost_coins: 1500, codes: ['UBER-SIM-150A', 'UBER-SIM-150B', 'UBER-SIM-150C'] },
+        { brand: 'Starbucks', label: '₹250 Beverage Card', cost_coins: 2500, codes: ['SBUX-SIM-250A', 'SBUX-SIM-250B', 'SBUX-SIM-250C'] },
+        { brand: 'Direct Cashback', label: '₹75 Direct UPI Cashback (on ₹5,000 spend)', cost_coins: 750, codes: ['CASH-SIM-75A', 'CASH-SIM-75B', 'CASH-SIM-75C'] },
+        { brand: 'Direct Cashback', label: '₹150 Direct UPI Cashback (on ₹10,000 spend)', cost_coins: 1500, codes: ['CASH-SIM-150A', 'CASH-SIM-150B', 'CASH-SIM-150C'] },
+        { brand: 'Direct Cashback', label: '₹300 Direct UPI Cashback (on ₹20,000 spend)', cost_coins: 3000, codes: ['CASH-SIM-300A', 'CASH-SIM-300B', 'CASH-SIM-300C'] },
       ];
 
       let countResult = await sql`SELECT COUNT(*)::int AS cnt FROM rewards WHERE active=true AND stock>0`;

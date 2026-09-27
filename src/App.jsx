@@ -5648,18 +5648,42 @@ export default function Paymint(){
   },[]);
 
   return(
-    <div style={{width:"100vw",height:"100dvh",background:T.black,
+    <div style={{width:"100vw",height:"100dvh",minHeight:"-webkit-fill-available",background:T.black,
       fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
-      overflow:"hidden",position:"relative",maxWidth:430,margin:"0 auto"}}>
+      overflow:"hidden",position:"relative",maxWidth:430,margin:"0 auto",
+      paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
-        html,body{background:#000;height:100%;}
+        html,body{
+          background:#000;
+          height:100%;
+          min-height:100vh;
+          min-height:-webkit-fill-available;
+          min-height:100dvh;
+          -webkit-text-size-adjust:100%;
+          -webkit-font-smoothing:antialiased;
+          -moz-osx-font-smoothing:grayscale;
+          overscroll-behavior:none;
+        }
+        #root{
+          min-height:100vh;
+          min-height:-webkit-fill-available;
+          min-height:100dvh;
+        }
         input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.28);}
         input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;}
         ::-webkit-scrollbar{display:none;}
-        *{-webkit-tap-highlight-color:transparent;}
-        input,textarea,select{-webkit-appearance:none;}
+        *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+        input,textarea,select{
+          -webkit-appearance:none;
+          -moz-appearance:none;
+          appearance:none;
+          font-size:16px !important;
+        }
+        div,main,section{
+          -webkit-overflow-scrolling:touch;
+        }
       `}</style>
 
       <AnimatePresence mode="wait">
