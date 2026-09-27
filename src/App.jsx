@@ -4951,38 +4951,39 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
       <AnimatePresence>
         {showPwModal&&(
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            style={{position:"absolute",inset:0,zIndex:300,background:"rgba(0,0,0,0.88)",
-              backdropFilter:"blur(20px)",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 28px"}}>
-            <motion.div initial={{scale:0.9,y:20}} animate={{scale:1,y:0}} transition={SP.bouncy}
-              style={{width:"100%",maxWidth:340,borderRadius:22,background:"#0A0A0C",
-                border:"1px solid rgba(255,255,255,0.1)",padding:"26px 20px"}}>
-              <h3 style={{margin:"0 0 16px",fontSize:19,fontWeight:800,color:T.text,textAlign:"center"}}>Enter Password</h3>
-              <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setPwErr("");}}
-                onKeyDown={e=>e.key==="Enter"&&handlePwSubmit()}
-                placeholder="••••••••"
-                autoFocus
-                style={{width:"100%",padding:"13px 15px",borderRadius:12,border:`1px solid ${T.glassBorder}`,
-                  background:T.glass,color:T.text,fontSize:16,fontFamily:"inherit",
-                  textAlign:"center",letterSpacing:"0.15em",
-                  outline:"none",caretColor:T.blue,boxSizing:"border-box",marginBottom:8}}/>
-              {pwErr&&<p style={{margin:"0 0 10px",fontSize:12,color:T.error}}>{pwErr}</p>}
-              <div style={{display:"flex",gap:10,marginTop:12,width:"100%",boxSizing:"border-box"}}>
-                <motion.button whileTap={{scale:0.96}}
-                  onClick={()=>{setShowPwModal(false);setPw("");setPwErr("");}}
-                  style={{flex:1,minWidth:0,boxSizing:"border-box",padding:"13px",borderRadius:12,background:T.glass,
-                    border:`1px solid ${T.glassBorder}`,color:T.textSub,fontSize:14,
-                    fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                  Cancel
-                </motion.button>
-                <motion.button whileTap={{scale:0.96}}
-                  onClick={handlePwSubmit}
-                  style={{flex:1,minWidth:0,boxSizing:"border-box",padding:"13px",borderRadius:12,border:"none",
-                    background:`linear-gradient(135deg,${T.blue},${T.blueDeep})`,
-                    color:"white",fontSize:14,fontWeight:700,fontFamily:"inherit",
-                    cursor:"pointer",boxShadow:"0 4px 14px rgba(74,158,255,0.35)"}}>
-                  Enter
-                </motion.button>
-              </div>
+            style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.88)",
+              backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
+              display:"flex",alignItems:"center",justifyContent:"center",padding:"16px",boxSizing:"border-box"}}>
+            <motion.div initial={{scale:0.92,y:16}} animate={{scale:1,y:0}} exit={{scale:0.92,opacity:0}} transition={SP.bouncy}
+              style={{width:"100%",maxWidth:320,boxSizing:"border-box",borderRadius:22,background:"#0D0D11",
+                border:"1px solid rgba(255,255,255,0.12)",padding:"24px 18px",boxShadow:"0 24px 60px rgba(0,0,0,0.9)"}}>
+              <h3 style={{margin:"0 0 16px",fontSize:18,fontWeight:800,color:T.text,textAlign:"center"}}>Enter Password</h3>
+              <form onSubmit={(e)=>{e.preventDefault();handlePwSubmit();}} style={{width:"100%",boxSizing:"border-box",margin:0}}>
+                <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setPwErr("");}}
+                  placeholder="••••••••"
+                  autoFocus
+                  style={{width:"100%",padding:"13px 14px",borderRadius:12,border:`1px solid ${T.glassBorder}`,
+                    background:"rgba(255,255,255,0.05)",color:T.text,fontSize:16,fontFamily:"inherit",
+                    textAlign:"center",letterSpacing:"0.2em",
+                    outline:"none",caretColor:T.blue,boxSizing:"border-box",marginBottom:4}}/>
+                {pwErr&&<p style={{margin:"6px 0 4px",fontSize:12,color:T.error,textAlign:"center"}}>{pwErr}</p>}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12,width:"100%",boxSizing:"border-box"}}>
+                  <motion.button type="button" whileTap={{scale:0.96}}
+                    onClick={()=>{setShowPwModal(false);setPw("");setPwErr("");}}
+                    style={{width:"100%",boxSizing:"border-box",padding:"12px 0",borderRadius:12,background:"rgba(255,255,255,0.06)",
+                      border:`1px solid ${T.glassBorder}`,color:T.textSub,fontSize:14,
+                      fontWeight:600,fontFamily:"inherit",cursor:"pointer",textAlign:"center"}}>
+                    Cancel
+                  </motion.button>
+                  <motion.button type="submit" whileTap={{scale:0.96}}
+                    style={{width:"100%",boxSizing:"border-box",padding:"12px 0",borderRadius:12,border:"none",
+                      background:`linear-gradient(135deg,${T.blue},${T.blueDeep})`,
+                      color:"white",fontSize:14,fontWeight:700,fontFamily:"inherit",
+                      cursor:"pointer",textAlign:"center",boxShadow:"0 4px 14px rgba(74,158,255,0.35)"}}>
+                    Enter
+                  </motion.button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}
