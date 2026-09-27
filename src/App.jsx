@@ -2058,6 +2058,7 @@ function DashboardScreen({userName}){
   const [challengeDetail,   setChallengeDetail]   = useState(null);
   const [allChallengesOpen, setAllChallengesOpen] = useState(false);
   const [completedChallenges, setCompletedChallenges] = useState({});
+  const [redeemedCodes, setRedeemedCodes] = useState({});
 
   useEffect(()=>{
     [0,280,520,760].forEach((t,i)=>setTimeout(()=>setBuiltStage(i+1),t+320));
@@ -2446,68 +2447,26 @@ function DashboardScreen({userName}){
             </motion.div>
           )}
 
-          {/* STORE */}
+          {/* REWARD STORE */}
           {tab==="store"&&(
             <motion.div key="store" initial={{opacity:0,x:30}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-30}}
-              transition={{duration:0.32}} style={{padding:"0 20px 20px"}}>
-              <Glow x={50} y={20} color="rgba(74,158,255,0.07)" size={400}/>
-              <div style={{marginBottom:16}}>
-                <h3 style={{fontSize:21,fontWeight:800,color:T.text,margin:"0 0 4px",letterSpacing:"-0.025em"}}>Reward Store</h3>
-                <p style={{fontSize:13,color:T.textSub,margin:0}}>
-                  {totalCoins===0?"Earn coins to unlock rewards.":`${fmt(totalCoins)} coins available.`}
-                </p>
-              </div>
-              {rewards.filter(r=>!r.locked).length>0&&(
-                <div style={{marginBottom:14}}>
-                  <p style={{margin:"0 0 8px",fontSize:12,color:T.blue,fontWeight:600,letterSpacing:"0.07em",textTransform:"uppercase"}}>Unlocked</p>
-                  {rewards.filter(r=>!r.locked).map((r,i)=>(
-                    <motion.div key={r.name} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:i*0.06,duration:0.35}}
-                      style={{borderRadius:16,padding:"14px",marginBottom:8,
-                        background:`linear-gradient(135deg,${r.col}10,${r.col}06)`,
-                        border:`1px solid ${r.col}30`}}>
-                      <div style={{display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{width:44,height:44,borderRadius:12,background:`${r.col}14`,
-                          border:`1px solid ${r.col}24`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <div style={{width:12,height:12,borderRadius:"50%",background:r.col}}/>
-                        </div>
-                        <div style={{flex:1}}>
-                          <p style={{margin:0,fontSize:14.5,fontWeight:700,color:T.text}}>{r.name}</p>
-                          <p style={{margin:0,fontSize:12,color:T.textSub,marginTop:2}}>{r.discount}</p>
-                        </div>
-                        <span style={{fontSize:11,fontWeight:600,color:r.col,background:`${r.col}14`,
-                          border:`1px solid ${r.col}26`,padding:"4px 10px",borderRadius:20}}>Claim</span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-              <p style={{margin:"0 0 10px",fontSize:12,color:T.textMute,fontWeight:500,
-                letterSpacing:"0.07em",textTransform:"uppercase"}}>Locked</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                {rewards.filter(r=>r.locked).map((r,i)=>(
-                  <motion.div key={r.name} initial={{opacity:0,y:16,scale:0.95}} animate={{opacity:1,y:0,scale:1}}
-                    transition={{delay:i*0.06,duration:0.38}}
-                    style={{borderRadius:16,padding:"15px 14px",background:"rgba(255,255,255,0.03)",
-                      border:"1px solid rgba(255,255,255,0.07)",backdropFilter:"blur(14px)",position:"relative",overflow:"hidden"}}>
-                    <div style={{position:"absolute",top:10,right:10}}>
-                      <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
-                        <rect x="1" y="6" width="10" height="7.5" rx="2" stroke={T.textMute} strokeWidth="1.2"/>
-                        <path d="M3 6V4a3 3 0 016 0v2" stroke={T.textMute} strokeWidth="1.2" strokeLinecap="round"/>
-                      </svg>
-                    </div>
-                    <div style={{width:38,height:38,borderRadius:11,background:`${r.col}12`,
-                      border:`1px solid ${r.col}22`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10}}>
-                      <div style={{width:10,height:10,borderRadius:"50%",background:r.col,opacity:0.5}}/>
-                    </div>
-                    <p style={{margin:0,fontSize:13,fontWeight:700,color:"rgba(242,242,247,0.5)"}}>{r.name}</p>
-                    <p style={{margin:"3px 0 0",fontSize:11,color:T.textMute}}>{r.discount}</p>
-                    <p style={{margin:"7px 0 0",fontSize:10.5,color:T.textMute,
-                      background:"rgba(255,255,255,0.04)",borderRadius:6,padding:"2px 7px",display:"inline-block"}}>
-                      {fmt(r.min)} coins
-                    </p>
-                  </motion.div>
-                ))}
-              </div>
+              transition={{duration:0.32}}>
+              <RewardStoreView
+                coins={totalCoins}
+                totalSpend={monthlySpend}
+                storeRewards={[]}
+                redeemedCodes={redeemedCodes}
+                onBack={()=>setTab("home")}
+                onClaimReward={async(brand,label,cost_coins)=>{
+                  const code = `${brand.slice(0,4).toUpperCase()}-SIM-${Math.random().toString(16).substring(2,6).toUpperCase()}-${Math.floor(1000+Math.random()*9000)}`;
+                  const newCoins = Math.max(0, totalCoins - cost_coins);
+                  setTotalCoins(newCoins);
+                  const key = brand+"||"+label;
+                  setRedeemedCodes(prev=>({...prev,[key]:code}));
+                  setNotif({type:"store", title:`${brand} Claimed`, sub:`Voucher Code: ${code}`});
+                  return { code, coin_balance: newCoins };
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -5620,7 +5579,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
             <line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" strokeWidth="1.6"/>
             <path d="M16 10a4 4 0 01-8 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
           </svg>
-          <span style={{fontSize:9.5,fontWeight:600,letterSpacing:"0.04em"}}>Store</span>
+          <span style={{fontSize:9.5,fontWeight:600,letterSpacing:"0.04em"}}>Rewards</span>
         </motion.button>
       </div>
     </div>
