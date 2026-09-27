@@ -1,3 +1,5 @@
+export const config = { maxDuration: 30, api: { bodyParser: { sizeLimit: '10mb' } } };
+
 import { setCorsHeaders } from './_auth.js';
 
 import adminAuth from './_routes/admin_auth.js';
@@ -23,8 +25,6 @@ import ocrHandler from './_routes/ocr.js';
 import uploadHandler from './_routes/upload.js';
 import leaderboardHandler from './_routes/leaderboard.js';
 import schemaHandler from './_routes/schema.js';
-import searchAllHandler from './_routes/search_all.js';
-import searchExactHandler from './_routes/search_exact.js';
 
 function getPathname(req) {
   let p = req.headers['x-matched-path'] || req.headers['x-forwarded-uri'] || req.headers['x-original-uri'] || req.url || '/';
@@ -75,8 +75,6 @@ export default async function handler(req, res) {
     if (p.endsWith('/upload')) return await uploadHandler(req, res);
     if (p.endsWith('/leaderboard')) return await leaderboardHandler(req, res);
     if (p.endsWith('/schema')) return await schemaHandler(req, res);
-    if (p.endsWith('/search_all')) return await searchAllHandler(req, res);
-    if (p.endsWith('/search_exact')) return await searchExactHandler(req, res);
 
     return res.status(404).json({ error: `Not found: ${p}` });
   } catch (err) {

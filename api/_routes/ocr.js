@@ -1,7 +1,6 @@
 // POST /api/ocr
 // OCR.space proxy — API key server-side only, never in browser/GitHub
 // Engine 3 → Engine 1 fallback with full self-diagnostic Vercel logging
-export const config = { maxDuration: 30, api: { bodyParser: { sizeLimit: '10mb' } } };
 
 // ── Noise rejection ────────────────────────────────────────────────────────
 function isNoise(val, raw) {
