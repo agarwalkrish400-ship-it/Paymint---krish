@@ -39,6 +39,23 @@ function getPathname(req) {
   }
 }
 
+function hasLocalDb() {
+  return !!(
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.STORAGE_POSTGRES_URL ||
+    process.env.STORAGE_DATABASE_URL ||
+    process.env.NEON_DATABASE_URL ||
+    Object.keys(process.env).find(k => 
+      (k.toUpperCase().includes('DATABASE_URL') || k.toUpperCase().includes('POSTGRES_URL') || k.toUpperCase().includes('POSTGRES')) &&
+      typeof process.env[k] === 'string' &&
+      (process.env[k].startsWith('postgres://') || process.env[k].startsWith('postgresql://'))
+    )
+  );
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -51,6 +68,32 @@ export default async function handler(req, res) {
 
     const p = getPathname(req);
     console.log('[API DISPATCH]', req.method, p);
+
+    // If this specific Vercel deployment has not attached the Postgres storage yet,
+    // seamlessly proxy to paymint-krish2.vercel.app where the live DB is connected!
+    if (!hasLocalDb() && !req.headers.host?.includes('paymint-krish2')) {
+      console.log('[API PROXY] Proxying request to live DB backend on paymint-krish2.vercel.app');
+      const targetUrl = `https://paymint-krish2.vercel.app${req.url && req.url.startsWith('/api/') ? req.url : p}`;
+      const fetchOpts = {
+        method: req.method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(req.headers['authorization'] ? { 'authorization': req.headers['authorization'] } : {}),
+          ...(req.headers['x-founder-password'] ? { 'x-founder-password': req.headers['x-founder-password'] } : {}),
+        },
+      };
+      if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+        fetchOpts.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+      }
+      const proxyRes = await fetch(targetUrl, fetchOpts);
+      const data = await proxyRes.text();
+      res.status(proxyRes.status);
+      try {
+        return res.json(JSON.parse(data));
+      } catch (e) {
+        return res.send(data);
+      }
+    }
 
     if (p.endsWith('/admin/auth')) return await adminAuth(req, res);
     if (p.endsWith('/admin/overview')) return await adminOverview(req, res);

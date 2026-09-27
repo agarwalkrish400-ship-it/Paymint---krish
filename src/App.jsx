@@ -2754,6 +2754,8 @@ const lc = {
 };
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
+const FALLBACK_API = 'https://paymint-krish2.vercel.app';
+
 async function apiFetch(path, opts={}) {
   const token = tokenStore.get();
   const headers = {
@@ -2763,16 +2765,43 @@ async function apiFetch(path, opts={}) {
     ...(opts.headers || {}),
   };
   try {
-    const res  = await fetch(API + path, {
+    const res = await fetch(API + path, {
       method:  opts.method || 'GET',
       headers,
       ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
     });
     const data = await res.json().catch(() => ({}));
+    
+    // Auto-fallback if the current domain does not have DATABASE_URL attached
+    if (!res.ok && (res.status === 500 || res.status === 404 || (data?.error && data.error.includes('DATABASE_URL')))) {
+      if (typeof window !== 'undefined' && !window.location.hostname.includes('paymint-krish2')) {
+        try {
+          const fallbackRes = await fetch(FALLBACK_API + path, {
+            method: opts.method || 'GET',
+            headers,
+            ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
+          });
+          const fallbackData = await fallbackRes.json().catch(() => ({}));
+          if (fallbackRes.ok) return fallbackData;
+        } catch (err) {}
+      }
+    }
+
     if (!res.ok) return { __apiError: true, status: res.status, message: data.error || 'Unknown error', data };
     return data;
   } catch (e) {
     console.error('[API]', path, e.message);
+    if (typeof window !== 'undefined' && !window.location.hostname.includes('paymint-krish2')) {
+      try {
+        const fallbackRes = await fetch(FALLBACK_API + path, {
+          method: opts.method || 'GET',
+          headers,
+          ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
+        });
+        const fallbackData = await fallbackRes.json().catch(() => ({}));
+        if (fallbackRes.ok) return fallbackData;
+      } catch(fbErr){}
+    }
     return { __apiError: true, status: 0, message: e.message };
   }
 }
