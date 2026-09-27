@@ -4904,7 +4904,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
     showNotif({ type:"earn", title:"Transaction Verified",
       sub:`+${serverCoins} Coins · ${tx.merchant}`, coins:serverCoins });
 
-    // 8. Purchase prompt — fires 10s after verified, bonus expires after 30 min
+    // 8. Purchase prompt — triggers instant popup for +5% bonus coins
     const insertedId = apiResult?.transaction?.id || newTx.id;
     const expiresAt  = new Date(Date.now() + 60*60*1000).toISOString(); // 1 hour window
     const bonusAmt   = parseFloat((tx.amount * 0.05).toFixed(1)); // 5% of payment amount (matches backend)
@@ -4912,14 +4912,14 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
     setBonusPendingTxIds(prev=>({...prev, [insertedId]: bonusAmt}));
     setPurchasePendingTxIds(prev=>({...prev, [insertedId]: expiresAt}));
 
-    // Expire after 30 min
+    // Expire after 1 hour
     setTimeout(()=>{
       setBonusPendingTxIds(prev=>{const n={...prev};delete n[insertedId];return n;});
       setPurchasePendingTxIds(prev=>{const n={...prev};delete n[insertedId];return n;});
-    }, 60*60*1000); // 1 hour
+    }, 60*60*1000);
 
-    // Show notification at 10s
-    setTimeout(()=>{ setPurchasePromptTxId(insertedId); }, 10000);
+    // Prompt user with pop-up right away for easy +5% bonus coins
+    setTimeout(()=>{ setPurchaseInputTxId(insertedId); }, 700);
     } catch(err) {
       console.error("[handleTx]", err.message);
       showNotif({type:"error", title:"Error", sub:"Could not save transaction. Please try again."});
@@ -5044,86 +5044,127 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
       <DismissTimer key={purchasePromptTxId||"none"} id={purchasePromptTxId}
         onDismiss={()=>setPurchasePromptTxId(null)}/>
 
-      {/* ── PURCHASE INPUT SHEET ── */}
+      {/* ── PURCHASE INPUT SHEET — EASY WHAT & WHERE (+5% BONUS COINS) ── */}
       <AnimatePresence>
         {purchaseInputTxId&&(
           <motion.div key={"pis"+purchaseInputTxId}
             initial={{opacity:0,y:"100%"}} animate={{opacity:1,y:0}} exit={{opacity:0,y:"100%"}}
             transition={{duration:0.38,...SP.gentle}}
-            style={{position:"absolute",inset:0,zIndex:92,display:"flex",
-              flexDirection:"column",justifyContent:"flex-end"}}>
+            style={{position:"fixed",inset:0,zIndex:999,display:"flex",
+              flexDirection:"column",justifyContent:"flex-end",boxSizing:"border-box"}}>
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
               onClick={()=>{setPurchaseInputTxId(null);setPurchaseNote("");}}
-              style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(10px)"}}/>
-            <motion.div style={{position:"relative",zIndex:2,background:"#0A0A0C",
-              borderRadius:"24px 24px 0 0",border:"1px solid rgba(255,255,255,0.1)"}}>
-              <div style={{display:"flex",justifyContent:"center",paddingTop:14,paddingBottom:4}}>
-                <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.14)"}}/>
+              style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}/>
+            <motion.div style={{position:"relative",zIndex:2,background:"#0D0D12",
+              borderRadius:"24px 24px 0 0",border:"1px solid rgba(255,255,255,0.12)",
+              maxHeight:"90vh",overflowY:"auto",boxSizing:"border-box",paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 24px)"}}>
+              <div style={{display:"flex",justifyContent:"center",paddingTop:12,paddingBottom:4}}>
+                <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.18)"}}/>
               </div>
-              <div style={{padding:"10px 24px 44px"}}>
+              <div style={{padding:"10px 20px 20px"}}>
                 {(()=>{
                   const bonAmt=bonusPendingTxIds[purchaseInputTxId];
                   const isEdit=!!txns.find(t=>t.id===purchaseInputTxId)?.purchase_note;
                   return(<>
-                    <h3 style={{margin:"0 0 8px",fontSize:20,fontWeight:800,color:"#F2F2F7"}}>
-                      {isEdit?"Edit Purchase":"What did you buy?"}
-                    </h3>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                      <h3 style={{margin:0,fontSize:18,fontWeight:800,color:"#F2F2F7"}}>
+                        {isEdit?"Edit Purchase Details":"What & Where Did You Spend?"}
+                      </h3>
+                      <button onClick={()=>{setPurchaseInputTxId(null);setPurchaseNote("");}}
+                        style={{background:"none",border:"none",color:T.textMute,fontSize:18,cursor:"pointer",padding:"4px"}}>
+                        ✕
+                      </button>
+                    </div>
+
                     {bonAmt&&!isEdit?(
                       <motion.div initial={{opacity:0,y:4}} animate={{opacity:1,y:0}}
-                        style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,
-                          padding:"10px 13px",borderRadius:12,
-                          background:"rgba(232,196,106,0.08)",
-                          border:"1px solid rgba(232,196,106,0.28)"}}>
-                        <motion.div animate={{scale:[1,1.5,1]}} transition={{duration:1,repeat:Infinity}}
+                        style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,
+                          padding:"8px 12px",borderRadius:12,
+                          background:"rgba(232,196,106,0.12)",
+                          border:"1px solid rgba(232,196,106,0.3)"}}>
+                        <motion.div animate={{scale:[1,1.4,1]}} transition={{duration:1,repeat:Infinity}}
                           style={{width:7,height:7,borderRadius:"50%",background:"#E8C46A",flexShrink:0}}/>
-                        <p style={{margin:0,fontSize:12.5,fontWeight:700,color:"#E8C46A"}}>
-                          Submit now → earn +{bonAmt} bonus coins instantly
+                        <p style={{margin:0,fontSize:12,fontWeight:700,color:"#E8C46A"}}>
+                          +5% Extra Coins Bonus: Earn +{bonAmt} coins instantly
                         </p>
                       </motion.div>
                     ):(
-                      <p style={{margin:"0 0 14px",fontSize:13,
-                        color:"rgba(242,242,247,0.55)",lineHeight:1.6}}>
-                        {isEdit?"Update your purchase details."
-                              :"Helps personalise your rewards experience."}
+                      <p style={{margin:"0 0 12px",fontSize:12,color:T.textMute,lineHeight:1.4}}>
+                        Provide expense details to unlock your +5% bonus coins.
                       </p>
                     )}
                   </>);
                 })()}
-                <input value={purchaseNote} onChange={e=>setPurchaseNote(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&handleSavePurchase()}
-                  autoFocus placeholder="e.g. milk, biscuits, shampoo…"
-                  style={{width:"100%",padding:"14px 16px",borderRadius:14,
-                    border:`1px solid ${purchaseNote.trim()?"#4A9EFF":"rgba(255,255,255,0.12)"}`,
-                    background:"rgba(255,255,255,0.05)",color:"#F2F2F7",fontSize:15,
-                    fontFamily:"inherit",outline:"none",caretColor:"#4A9EFF",
-                    boxSizing:"border-box",marginBottom:12,transition:"border-color 0.2s"}}/>
-                <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:14}}>
-                  {["Groceries","Food","Medicine","Transport","Recharge","Shopping","Dining"].map(chip=>(
-                    <motion.button key={chip} whileTap={{scale:0.93}}
-                      onClick={()=>setPurchaseNote(p=>p?p+", "+chip:chip)}
-                      style={{padding:"5px 12px",borderRadius:20,
-                        background:"rgba(74,158,255,0.08)",
-                        border:"1px solid rgba(74,158,255,0.2)",color:"#4A9EFF",
-                        fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                      {chip}
+
+                {/* 1. What was this expense for? */}
+                <p style={{margin:"0 0 6px",fontSize:11.5,fontWeight:700,color:T.blue,letterSpacing:"0.03em",textTransform:"uppercase"}}>
+                  1. What was this expense for?
+                </p>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                  {["🍕 Food & Dining","🛒 Groceries","🛍️ Shopping","☕ Coffee","🚕 Travel & Cab","🎬 Movies & Fun","📱 Bills & Recharge","💊 Pharmacy"].map(tag=>(
+                    <motion.button key={tag} whileTap={{scale:0.94}}
+                      onClick={()=>{
+                        const cleanTag = tag.replace(/^[^\w\s]+/, '').trim();
+                        setPurchaseNote(prev=>{
+                          if(!prev) return `What: ${cleanTag}`;
+                          if(prev.includes("What:")) return prev.replace(/What:[^·]+/, `What: ${cleanTag} `);
+                          return `What: ${cleanTag} · ${prev}`;
+                        });
+                      }}
+                      style={{padding:"5px 10px",borderRadius:16,
+                        background:"rgba(74,158,255,0.08)",border:"1px solid rgba(74,158,255,0.22)",
+                        color:"#80C4FF",fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                      {tag}
                     </motion.button>
                   ))}
                 </div>
+
+                {/* 2. Where was it spent? */}
+                <p style={{margin:"0 0 6px",fontSize:11.5,fontWeight:700,color:T.gold,letterSpacing:"0.03em",textTransform:"uppercase"}}>
+                  2. Where was it spent?
+                </p>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                  {["Swiggy","Zomato","Blinkit","Zepto","Amazon","Flipkart","Starbucks","Uber","Local Store","Online"].map(wh=>(
+                    <motion.button key={wh} whileTap={{scale:0.94}}
+                      onClick={()=>{
+                        setPurchaseNote(prev=>{
+                          if(!prev) return `Where: ${wh}`;
+                          if(prev.includes("Where:")) return prev.replace(/Where:.+$/, `Where: ${wh}`);
+                          return `${prev} · Where: ${wh}`;
+                        });
+                      }}
+                      style={{padding:"5px 10px",borderRadius:16,
+                        background:"rgba(232,196,106,0.08)",border:"1px solid rgba(232,196,106,0.22)",
+                        color:T.gold,fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                      {wh}
+                    </motion.button>
+                  ))}
+                </div>
+
+                {/* Note / Edit Field */}
+                <input value={purchaseNote} onChange={e=>setPurchaseNote(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&handleSavePurchase()}
+                  placeholder="e.g. What: Groceries · Where: Blinkit"
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,
+                    border:`1px solid ${purchaseNote.trim()?T.blue:T.glassBorder}`,
+                    background:"rgba(255,255,255,0.05)",color:"#F2F2F7",fontSize:16,
+                    fontFamily:"inherit",outline:"none",caretColor:T.blue,
+                    boxSizing:"border-box",marginBottom:14}}/>
+
                 <motion.button disabled={!purchaseNote.trim()||savingNote}
                   onClick={handleSavePurchase}
                   whileTap={purchaseNote.trim()&&!savingNote?{scale:0.97}:{}}
-                  style={{width:"100%",padding:"14px",borderRadius:100,border:"none",
+                  style={{width:"100%",padding:"13px",borderRadius:14,border:"none",
                     cursor:purchaseNote.trim()&&!savingNote?"pointer":"not-allowed",
                     background:purchaseNote.trim()
-                      ?"linear-gradient(135deg,#4A9EFF,#1E5FCC)"
-                      :"rgba(255,255,255,0.07)",
-                    color:purchaseNote.trim()?"white":"rgba(255,255,255,0.25)",
-                    fontSize:15,fontWeight:700,fontFamily:"inherit",
-                    boxShadow:purchaseNote.trim()?"0 0 24px rgba(74,158,255,0.3)":"none",
-                    transition:"all 0.2s"}}>
+                      ?`linear-gradient(135deg,${T.blue},${T.blueDeep})`
+                      :"rgba(255,255,255,0.08)",
+                    color:purchaseNote.trim()?"white":"rgba(255,255,255,0.3)",
+                    fontSize:14,fontWeight:700,fontFamily:"inherit",
+                    boxShadow:purchaseNote.trim()?"0 4px 18px rgba(74,158,255,0.35)":"none"}}>
                   {savingNote?"Saving…":(()=>{
                     const b=bonusPendingTxIds[purchaseInputTxId];
-                    return b?`Save & Earn +${b} Bonus Coins`:"Save Purchase";
+                    return b?`Claim +${b} Extra Coins (5%) →`:"Save Purchase Details";
                   })()}
                 </motion.button>
               </div>

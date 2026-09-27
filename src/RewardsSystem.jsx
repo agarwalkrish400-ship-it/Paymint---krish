@@ -378,14 +378,14 @@ export function BrandLogoBadge({ brand = "", size = 44 }) {
 // CURATED REWARDS SIMULATION CATALOG
 // ─────────────────────────────────────────────────────────────────────────────
 export const CURATED_REWARDS_CATALOG = [
-  // OTT & Subscriptions
+  // OTT & Subscriptions (Flat 50% Voucher Return on Coins)
   {
     id: "netflix-mobile",
     brand: "Netflix",
     label: "1-Month Mobile Subscription",
     faceValue: 149,
-    cost_coins: 1490,
-    requiredSpend: 2980, // 5% of ~₹3000 spend
+    cost_coins: 298, // 50% voucher return (₹149 / 0.5 = 298 coins)
+    requiredSpend: 2980,
     category: "OTT & Entertainment",
     type: "subscription",
     duration: "1 Month",
@@ -398,7 +398,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Netflix",
     label: "1-Month Basic HD Plan",
     faceValue: 199,
-    cost_coins: 1990,
+    cost_coins: 398,
     requiredSpend: 3980,
     category: "OTT & Entertainment",
     type: "subscription",
@@ -411,7 +411,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Spotify",
     label: "1-Month Premium Individual",
     faceValue: 119,
-    cost_coins: 1190,
+    cost_coins: 238,
     requiredSpend: 2380,
     category: "Music",
     type: "subscription",
@@ -425,7 +425,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Apple Music",
     label: "1-Month Individual Plan",
     faceValue: 99,
-    cost_coins: 990,
+    cost_coins: 198,
     requiredSpend: 1980,
     category: "Music",
     type: "subscription",
@@ -438,7 +438,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "YouTube Premium",
     label: "1-Month Ad-Free + YouTube Music",
     faceValue: 149,
-    cost_coins: 1490,
+    cost_coins: 298,
     requiredSpend: 2980,
     category: "OTT & Entertainment",
     type: "subscription",
@@ -451,7 +451,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Swiggy",
     label: "1-Month Swiggy One Membership",
     faceValue: 99,
-    cost_coins: 990,
+    cost_coins: 198,
     requiredSpend: 1980,
     category: "Food & Dining",
     type: "subscription",
@@ -465,7 +465,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Zepto",
     label: "1-Month Zepto Pass",
     faceValue: 99,
-    cost_coins: 990,
+    cost_coins: 198,
     requiredSpend: 1980,
     category: "Quick Commerce",
     type: "subscription",
@@ -478,7 +478,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Zomato",
     label: "1-Month Zomato Gold Pass",
     faceValue: 99,
-    cost_coins: 990,
+    cost_coins: 198,
     requiredSpend: 1980,
     category: "Food & Dining",
     type: "subscription",
@@ -488,13 +488,13 @@ export const CURATED_REWARDS_CATALOG = [
     popular: true,
   },
 
-  // Daily Spending Vouchers (5% spend returns)
+  // Daily Spending Vouchers (Flat 50% returns on coins)
   {
     id: "amazon-250",
     brand: "Amazon",
     label: "₹250 Amazon Pay Gift Card",
     faceValue: 250,
-    cost_coins: 2500,
+    cost_coins: 500, // 500 coins = ₹250 voucher
     requiredSpend: 5000,
     category: "Shopping",
     type: "voucher",
@@ -507,7 +507,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Amazon",
     label: "₹500 Amazon Pay Gift Card",
     faceValue: 500,
-    cost_coins: 5000,
+    cost_coins: 1000,
     requiredSpend: 10000,
     category: "Shopping",
     type: "voucher",
@@ -519,7 +519,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Blinkit",
     label: "₹100 Quick Commerce Voucher",
     faceValue: 100,
-    cost_coins: 1000,
+    cost_coins: 200,
     requiredSpend: 2000,
     category: "Quick Commerce",
     type: "voucher",
@@ -532,7 +532,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Blinkit",
     label: "₹250 Quick Commerce Voucher",
     faceValue: 250,
-    cost_coins: 2500,
+    cost_coins: 500,
     requiredSpend: 5000,
     category: "Quick Commerce",
     type: "voucher",
@@ -544,7 +544,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Swiggy",
     label: "₹200 Food Delivery Voucher",
     faceValue: 200,
-    cost_coins: 2000,
+    cost_coins: 400,
     requiredSpend: 4000,
     category: "Food & Dining",
     type: "voucher",
@@ -556,7 +556,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Zomato",
     label: "₹200 Dining & Delivery Voucher",
     faceValue: 200,
-    cost_coins: 2000,
+    cost_coins: 400,
     requiredSpend: 4000,
     category: "Food & Dining",
     type: "voucher",
@@ -568,7 +568,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Myntra",
     label: "₹300 Fashion Voucher",
     faceValue: 300,
-    cost_coins: 3000,
+    cost_coins: 600,
     requiredSpend: 6000,
     category: "Fashion",
     type: "voucher",
@@ -581,7 +581,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Flipkart",
     label: "₹250 Shopping Gift Card",
     faceValue: 250,
-    cost_coins: 2500,
+    cost_coins: 500,
     requiredSpend: 5000,
     category: "Shopping",
     type: "voucher",
@@ -593,7 +593,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Uber",
     label: "₹150 Uber Rides Voucher",
     faceValue: 150,
-    cost_coins: 1500,
+    cost_coins: 300,
     requiredSpend: 3000,
     category: "Travel",
     type: "voucher",
@@ -605,7 +605,7 @@ export const CURATED_REWARDS_CATALOG = [
     brand: "Starbucks",
     label: "₹250 Beverage Card",
     faceValue: 250,
-    cost_coins: 2500,
+    cost_coins: 500,
     requiredSpend: 5000,
     category: "Food & Dining",
     type: "voucher",
@@ -613,42 +613,54 @@ export const CURATED_REWARDS_CATALOG = [
     codePrefix: "SBUX-SIM",
   },
 
-  // Direct 1.5% Cashback Return Mode
+  // Direct Flat 15% Cashback on Total Coins (2-day cycle)
   {
     id: "cashback-75",
     brand: "Direct Cashback",
-    label: "₹75 Direct UPI Cashback (on ₹5,000 spend)",
+    label: "₹75 Direct UPI Cashback (15% on 500 coins)",
     faceValue: 75,
-    cost_coins: 750,
+    cost_coins: 500, // 500 coins * 15% = ₹75 cash
     requiredSpend: 5000,
     category: "Cashback",
     type: "cashback",
-    description: "1.5% direct return deposited instantly to your linked UPI bank account.",
+    description: "Flat 15% direct cash return disbursed every 2 days directly to your linked UPI ID.",
     codePrefix: "CASH-SIM",
     popular: true,
   },
   {
     id: "cashback-150",
     brand: "Direct Cashback",
-    label: "₹150 Direct UPI Cashback (on ₹10,000 spend)",
+    label: "₹150 Direct UPI Cashback (15% on 1,000 coins)",
     faceValue: 150,
-    cost_coins: 1500,
+    cost_coins: 1000, // 1,000 coins * 15% = ₹150 cash
     requiredSpend: 10000,
     category: "Cashback",
     type: "cashback",
-    description: "1.5% direct cashback payout on ₹10,000 total verified UPI transaction spend.",
+    description: "Flat 15% direct cashback payout disbursed every 2 days directly via UPI.",
     codePrefix: "CASH-SIM",
   },
   {
     id: "cashback-300",
     brand: "Direct Cashback",
-    label: "₹300 Direct UPI Cashback (on ₹20,000 spend)",
+    label: "₹300 Direct UPI Cashback (15% on 2,000 coins)",
     faceValue: 300,
-    cost_coins: 3000,
+    cost_coins: 2000, // 2,000 coins * 15% = ₹300 cash
     requiredSpend: 20000,
     category: "Cashback",
     type: "cashback",
-    description: "1.5% direct cashback payout on ₹20,000 verified spend across all merchants.",
+    description: "Flat 15% direct cashback payout on 2,000 coins. Disbursed every 2 days directly to UPI.",
+    codePrefix: "CASH-SIM",
+  },
+  {
+    id: "cashback-750",
+    brand: "Direct Cashback",
+    label: "₹750 Direct UPI Cashback (15% on 5,000 coins)",
+    faceValue: 750,
+    cost_coins: 5000, // 5,000 coins * 15% = ₹750 cash
+    requiredSpend: 50000,
+    category: "Cashback",
+    type: "cashback",
+    description: "Flat 15% high-volume direct cashback payout. Disbursed every 2 days directly to UPI.",
     codePrefix: "CASH-SIM",
   },
 ];
@@ -960,7 +972,7 @@ export function RewardStoreView({
             gap: 2,
           }}
         >
-          <span style={{ fontSize: 13, fontWeight: 800 }}>5% Spend Vouchers</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>Flat 50% on Vouchers</span>
           <span
             style={{
               fontSize: 10,
@@ -968,7 +980,7 @@ export function RewardStoreView({
               fontWeight: 500,
             }}
           >
-            e.g. ₹5,000 spend = ₹250–₹300
+            500 coins = ₹250 Voucher
           </span>
         </motion.button>
 
@@ -996,7 +1008,7 @@ export function RewardStoreView({
             gap: 2,
           }}
         >
-          <span style={{ fontSize: 13, fontWeight: 800 }}>1.5% Direct Cashback</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>Flat 15% on Cashback</span>
           <span
             style={{
               fontSize: 10,
@@ -1004,9 +1016,36 @@ export function RewardStoreView({
               fontWeight: 500,
             }}
           >
-            e.g. ₹5,000 spend = ₹75 cash
+            500 coins = ₹75 Cash · 2-Day Cycle
           </span>
         </motion.button>
+      </div>
+
+      {/* ── MUTUAL EXCLUSIVITY & 2-DAY REDEMPTION CYCLE NOTICE ── */}
+      <div
+        style={{
+          borderRadius: 12,
+          padding: "10px 12px",
+          marginBottom: 14,
+          background: returnMode === "cashback" ? "rgba(0,200,83,0.08)" : "rgba(74,158,255,0.08)",
+          border: `1px solid ${returnMode === "cashback" ? "rgba(0,200,83,0.24)" : "rgba(74,158,255,0.24)"}`,
+          display: "flex",
+          alignItems: "center",
+          gap: 9,
+        }}
+      >
+        <span style={{ fontSize: 16 }}>{returnMode === "cashback" ? "⚡" : "🔒"}</span>
+        <p style={{ margin: 0, fontSize: 11.5, color: T.textSub, lineHeight: 1.45 }}>
+          {returnMode === "cashback" ? (
+            <>
+              <strong style={{ color: "#00E676" }}>2-Day Cash Redemption Cycle:</strong> Direct UPI cashback is disbursed every 2 days. Both voucher & cashback redemptions cannot be combined.
+            </>
+          ) : (
+            <>
+              <strong style={{ color: "#80C4FF" }}>Exclusive Reward Mode:</strong> You can choose either 50% Brand Vouchers OR 15% Direct Cashback (both cannot be active simultaneously).
+            </>
+          )}
+        </p>
       </div>
 
       {/* ── SEARCH & CATEGORY CHIPS ── */}
@@ -1739,9 +1778,9 @@ export function FounderRewardsTab({
     setFaceValue(val);
     const num = Number(val || 0);
     if (rewardType === "cashback") {
-      setCoinCost(String(num * 10)); // e.g. ₹75 = 750 coins
+      setCoinCost(String(Math.round(num / 0.15))); // 15% cashback rate -> e.g. ₹75 = 500 coins
     } else {
-      setCoinCost(String(num * 10)); // e.g. ₹250 = 2500 coins
+      setCoinCost(String(Math.round(num * 2))); // 50% voucher rate -> e.g. ₹250 = 500 coins
     }
   };
 
@@ -1751,37 +1790,37 @@ export function FounderRewardsTab({
       setRewardType("subscription");
       setCustomLabel("1-Month Mobile Plan");
       setFaceValue("149");
-      setCoinCost("1490");
+      setCoinCost("298");
     } else if (brand === "Spotify") {
       setRewardType("subscription");
       setCustomLabel("1-Month Premium Music");
       setFaceValue("119");
-      setCoinCost("1190");
+      setCoinCost("238");
     } else if (brand === "Apple Music") {
       setRewardType("subscription");
       setCustomLabel("1-Month Individual");
       setFaceValue("99");
-      setCoinCost("990");
+      setCoinCost("198");
     } else if (brand === "Swiggy") {
       setRewardType("subscription");
       setCustomLabel("1-Month Swiggy One");
       setFaceValue("99");
-      setCoinCost("990");
+      setCoinCost("198");
     } else if (brand === "Zepto") {
       setRewardType("subscription");
       setCustomLabel("1-Month Zepto Pass");
       setFaceValue("99");
-      setCoinCost("990");
+      setCoinCost("198");
     } else if (brand === "Direct Cashback") {
       setRewardType("cashback");
-      setCustomLabel("₹75 Direct Cashback (1.5%)");
+      setCustomLabel("₹75 Direct Cashback (15%)");
       setFaceValue("75");
-      setCoinCost("750");
+      setCoinCost("500");
     } else if (brand !== "Custom Brand") {
       setRewardType("voucher");
       setCustomLabel("₹250 Gift Voucher");
       setFaceValue("250");
-      setCoinCost("2500");
+      setCoinCost("500");
     }
   };
 
@@ -2132,7 +2171,7 @@ export function FounderRewardsTab({
                 </div>
               </div>
 
-              {/* 1-Click Simulation Codes Generator */}
+              {/* NUMBER OF COUPONS (MIN: 1, MAX: 10) */}
               <div
                 style={{
                   background: "rgba(74,158,255,0.05)",
@@ -2143,29 +2182,74 @@ export function FounderRewardsTab({
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <p style={{ margin: 0, fontSize: 11.5, fontWeight: 700, color: T.blue }}>
-                    Auto-Generate Simulation Codes
-                  </p>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {[5, 10, 25].map((cnt) => (
-                      <button
-                        key={cnt}
-                        onClick={() => setBatchCodeCount(cnt)}
-                        style={{
-                          padding: "2px 6px",
-                          borderRadius: 6,
-                          background: batchCodeCount === cnt ? T.blue : T.glass,
-                          color: batchCodeCount === cnt ? "white" : T.textSub,
-                          border: "none",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {cnt}
-                      </button>
-                    ))}
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.blue }}>
+                      NUMBER OF COUPONS (MIN: 1, MAX: 10)
+                    </p>
+                    <p style={{ margin: "2px 0 0", fontSize: 10.5, color: T.textMute }}>
+                      Selected: <strong style={{ color: T.gold }}>{batchCodeCount} coupons</strong>
+                    </p>
                   </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setBatchCodeCount((c) => Math.max(1, c - 1))}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 6,
+                        background: T.glass,
+                        border: `1px solid ${T.glassBorder}`,
+                        color: T.text,
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                    >
+                      -
+                    </button>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: T.text, minWidth: 16, textAlign: "center" }}>
+                      {batchCodeCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setBatchCodeCount((c) => Math.min(10, c + 1))}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 6,
+                        background: T.glass,
+                        border: `1px solid ${T.glassBorder}`,
+                        color: T.text,
+                        cursor: "pointer",
+                        fontWeight: 800,
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 3, marginBottom: 10 }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((cnt) => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setBatchCodeCount(cnt)}
+                      style={{
+                        padding: "6px 0",
+                        borderRadius: 6,
+                        background: batchCodeCount === cnt ? T.blue : "rgba(255,255,255,0.05)",
+                        color: batchCodeCount === cnt ? "white" : T.textSub,
+                        border: `1px solid ${batchCodeCount === cnt ? T.blue : "rgba(255,255,255,0.08)"}`,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        textAlign: "center",
+                      }}
+                    >
+                      {cnt}
+                    </button>
+                  ))}
                 </div>
 
                 <motion.button
@@ -2173,12 +2257,12 @@ export function FounderRewardsTab({
                   onClick={handleGenerateSimulationCodes}
                   style={{
                     width: "100%",
-                    padding: "7px",
+                    padding: "8px",
                     borderRadius: 8,
                     background: "rgba(74,158,255,0.15)",
                     border: "1px solid rgba(74,158,255,0.3)",
                     color: T.blue,
-                    fontSize: 11.5,
+                    fontSize: 12,
                     fontWeight: 700,
                     cursor: "pointer",
                     fontFamily: "inherit",
