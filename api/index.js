@@ -43,39 +43,44 @@ export default async function handler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Parse body if passed as string/buffer
-  if (typeof req.body === 'string' && req.body.length > 0) {
-    try { req.body = JSON.parse(req.body); } catch(e){}
+  try {
+    // Parse body if passed as string/buffer
+    if (typeof req.body === 'string' && req.body.length > 0) {
+      try { req.body = JSON.parse(req.body); } catch(e){}
+    }
+
+    const p = getPathname(req);
+    console.log('[API DISPATCH]', req.method, p);
+
+    if (p.endsWith('/admin/auth')) return await adminAuth(req, res);
+    if (p.endsWith('/admin/overview')) return await adminOverview(req, res);
+    if (p.endsWith('/admin/redemptions')) return await adminRedemptions(req, res);
+    if (p.endsWith('/admin/telemetry')) return await adminTelemetry(req, res);
+    if (p.endsWith('/admin/transactions')) return await adminTransactions(req, res);
+    if (p.endsWith('/admin/users')) return await adminUsers(req, res);
+
+    if (p.endsWith('/rewards/claim')) return await rewardsClaim(req, res);
+    if (p.endsWith('/rewards/manage')) return await rewardsManage(req, res);
+    if (p.endsWith('/rewards') || p.endsWith('/rewards/index')) return await rewardsIndex(req, res);
+
+    if (p.endsWith('/users/register')) return await usersRegister(req, res);
+    if (p.endsWith('/users/login')) return await usersLogin(req, res);
+    if (p.endsWith('/users/me')) return await usersMe(req, res);
+
+    if (p.endsWith('/transactions/note')) return await transactionsNote(req, res);
+    if (p.endsWith('/transactions') || p.endsWith('/transactions/index')) return await transactionsIndex(req, res);
+
+    if (p.endsWith('/telemetry/log') || p.endsWith('/telemetry')) return await telemetryLog(req, res);
+    if (p.endsWith('/ocr')) return await ocrHandler(req, res);
+    if (p.endsWith('/upload')) return await uploadHandler(req, res);
+    if (p.endsWith('/leaderboard')) return await leaderboardHandler(req, res);
+    if (p.endsWith('/schema')) return await schemaHandler(req, res);
+    if (p.endsWith('/search_all')) return await searchAllHandler(req, res);
+    if (p.endsWith('/search_exact')) return await searchExactHandler(req, res);
+
+    return res.status(404).json({ error: `Not found: ${p}` });
+  } catch (err) {
+    console.error('[API Unhandled Error]', err);
+    return res.status(500).json({ error: err.message || 'Internal Server Error' });
   }
-
-  const p = getPathname(req);
-  console.log('[API DISPATCH]', req.method, p);
-
-  if (p.endsWith('/admin/auth')) return adminAuth(req, res);
-  if (p.endsWith('/admin/overview')) return adminOverview(req, res);
-  if (p.endsWith('/admin/redemptions')) return adminRedemptions(req, res);
-  if (p.endsWith('/admin/telemetry')) return adminTelemetry(req, res);
-  if (p.endsWith('/admin/transactions')) return adminTransactions(req, res);
-  if (p.endsWith('/admin/users')) return adminUsers(req, res);
-
-  if (p.endsWith('/rewards/claim')) return rewardsClaim(req, res);
-  if (p.endsWith('/rewards/manage')) return rewardsManage(req, res);
-  if (p.endsWith('/rewards') || p.endsWith('/rewards/index')) return rewardsIndex(req, res);
-
-  if (p.endsWith('/users/register')) return usersRegister(req, res);
-  if (p.endsWith('/users/login')) return usersLogin(req, res);
-  if (p.endsWith('/users/me')) return usersMe(req, res);
-
-  if (p.endsWith('/transactions/note')) return transactionsNote(req, res);
-  if (p.endsWith('/transactions') || p.endsWith('/transactions/index')) return transactionsIndex(req, res);
-
-  if (p.endsWith('/telemetry/log') || p.endsWith('/telemetry')) return telemetryLog(req, res);
-  if (p.endsWith('/ocr')) return ocrHandler(req, res);
-  if (p.endsWith('/upload')) return uploadHandler(req, res);
-  if (p.endsWith('/leaderboard')) return leaderboardHandler(req, res);
-  if (p.endsWith('/schema')) return schemaHandler(req, res);
-  if (p.endsWith('/search_all')) return searchAllHandler(req, res);
-  if (p.endsWith('/search_exact')) return searchExactHandler(req, res);
-
-  return res.status(404).json({ error: `Not found: ${p}` });
 }
