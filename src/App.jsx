@@ -4736,6 +4736,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
   const [leaderboard,setLeaderboard]=useState([]);
   const [uploadOpen,setUploadOpen]=useState(false);
   const [menuOpen,setMenuOpen]=useState(false);
+  const [showInstallModal,setShowInstallModal]=useState(false);
   const [notif,setNotif]=useState(null);
   const [loadingData,setLoadingData]=useState(true);
   const [storeRewards,setStoreRewards]=useState([]); // grouped unique brand+label from API
@@ -5320,6 +5321,30 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                 </div>
               </motion.div>
 
+              {/* INSTALL APP ON IOS / WEB BANNER */}
+              <motion.div
+                initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:0.2,...SP.gentle}}
+                whileTap={{scale:0.98}}
+                onClick={()=>setShowInstallModal(true)}
+                style={{borderRadius:16,padding:"11px 14px",marginBottom:14,cursor:"pointer",
+                  background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",
+                  display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:9}}>
+                  <div style={{width:28,height:28,borderRadius:8,background:"rgba(74,158,255,0.14)",
+                    border:"1px solid rgba(74,158,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <span style={{fontSize:14}}>📲</span>
+                  </div>
+                  <div>
+                    <p style={{margin:0,fontSize:12.5,fontWeight:700,color:T.text}}>Install Paymint on iPhone / iPad</p>
+                    <p style={{margin:0,fontSize:10.5,color:T.textMute}}>Add to Home Screen for fullscreen native feel</p>
+                  </div>
+                </div>
+                <span style={{fontSize:11,fontWeight:700,color:T.blue,background:"rgba(74,158,255,0.1)",
+                  border:"1px solid rgba(74,158,255,0.2)",padding:"3px 8px",borderRadius:10}}>
+                  Guide →
+                </span>
+              </motion.div>
+
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
                 <p style={{margin:0,fontSize:13,fontWeight:700,color:T.textSub}}>Recent Transactions</p>
                 {txns.length>2&&(
@@ -5612,6 +5637,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                   <p style={{margin:0,fontSize:11,color:T.blue,fontWeight:600}}>Beta · {coins.toFixed(1)} coins</p>
                 </div>
                 {[
+                  {l:"Install App (iOS / Web)", ico:"download", fn:()=>{setMenuOpen(false);setShowInstallModal(true);}},
                   {l:"Profile",           ico:"user",   fn:()=>{setTab("profile");setMenuOpen(false);}},
                   {l:"Leaderboard",       ico:"trophy", fn:()=>{setTab("leaderboard");setMenuOpen(false);}},
                   {l:"Explore Prototype", ico:"grid",   fn:()=>{setMenuOpen(false);onExplorePrototype();}},
@@ -5622,6 +5648,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                       textAlign:"left",fontFamily:"inherit"}}>
                     <div style={{width:30,height:30,borderRadius:8,background:T.glass,border:`1px solid ${T.glassBorder}`,
                       display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {item.ico==="download"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4.5 7l3.5 3.5L11.5 7M2 12v1.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V12" stroke={T.blue} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                       {item.ico==="user"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke={T.textSub} strokeWidth="1.3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke={T.textSub} strokeWidth="1.3" strokeLinecap="round"/></svg>}
                       {item.ico==="trophy"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l1.4 2.9 3.2.47-2.3 2.25.54 3.18L8 8.75l-2.84 1.55.54-3.18L3.4 4.87l3.2-.47z" stroke={T.gold} strokeWidth="1.2" strokeLinejoin="round"/></svg>}
                       {item.ico==="grid"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/></svg>}
@@ -5677,7 +5704,337 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
           <span style={{fontSize:9.5,fontWeight:600,letterSpacing:"0.04em"}}>Rewards</span>
         </motion.button>
       </div>
+
+      {/* ── IOS INSTALL GUIDE MODAL ── */}
+      <AnimatePresence>
+        {showInstallModal && (
+          <IOSInstallModal onClose={() => setShowInstallModal(false)} />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// IOS / MOBILE APP INSTALL GUIDE MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+function IOSInstallModal({ onClose }) {
+  const [copied, setCopied] = useState(false);
+  const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent || "");
+
+  const handleCopyLink = () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        navigator.clipboard.writeText(window.location.origin);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }
+    } catch(e) {}
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.88)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        boxSizing: "border-box",
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0.92, y: 24, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.92, y: 14, opacity: 0 }}
+        transition={SP.bouncy}
+        style={{
+          width: "100%",
+          maxWidth: 360,
+          maxHeight: "90vh",
+          overflowY: "auto",
+          boxSizing: "border-box",
+          borderRadius: 26,
+          background: "linear-gradient(145deg, #13131A, #08080C)",
+          border: "1px solid rgba(255,255,255,0.14)",
+          padding: "24px 20px 20px",
+          boxShadow: "0 28px 70px rgba(0,0,0,0.95), 0 0 50px rgba(74,158,255,0.14)",
+          position: "relative",
+        }}
+      >
+        {/* Header Icon + Title */}
+        <div style={{ textAlign: "center", marginBottom: 18 }}>
+          <div
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: 18,
+              background: `linear-gradient(145deg, ${T.blue}, ${T.blueDeep})`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 12px",
+              boxShadow: "0 8px 26px rgba(74,158,255,0.35)",
+            }}
+          >
+            <LogoMark size={32} />
+          </div>
+
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "3px 10px",
+              borderRadius: 16,
+              background: "rgba(74,158,255,0.12)",
+              border: "1px solid rgba(74,158,255,0.25)",
+              marginBottom: 8,
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.blue, letterSpacing: "0.03em" }}>
+              {isIOS ? " Apple iOS / iPadOS App" : "📱 Mobile Web App (PWA)"}
+            </span>
+          </div>
+
+          <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.02em" }}>
+            Install Paymint
+          </h3>
+          <p style={{ margin: 0, fontSize: 12.5, color: T.textSub, lineHeight: 1.45 }}>
+            {isIOS
+              ? "Follow these 2 simple steps in Safari to add Paymint to your iPhone home screen."
+              : "Install Paymint directly on your device for instant launch and offline support."}
+          </p>
+        </div>
+
+        {/* 3 Step-by-Step Instructions */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+          {/* Step 1 */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: 15,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: "rgba(74,158,255,0.14)",
+                border: "1px solid rgba(74,158,255,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                fontSize: 13,
+                fontWeight: 800,
+                color: T.blue,
+              }}
+            >
+              1
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: T.text }}>
+                Tap the <strong style={{ color: "#80C4FF" }}>Share Button</strong>
+              </p>
+              <p style={{ margin: 0, fontSize: 11.5, color: T.textSub, lineHeight: 1.4 }}>
+                At the bottom toolbar of Safari, tap the Share icon (
+                <span
+                  style={{
+                    background: "rgba(255,255,255,0.1)",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    color: "white",
+                  }}
+                >
+                  ⎋
+                </span>{" "}
+                square with arrow pointing up).
+              </p>
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: 15,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: "rgba(232,196,106,0.14)",
+                border: "1px solid rgba(232,196,106,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                fontSize: 13,
+                fontWeight: 800,
+                color: T.gold,
+              }}
+            >
+              2
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: T.text }}>
+                Select <strong style={{ color: "#FFE599" }}>"Add to Home Screen"</strong>
+              </p>
+              <p style={{ margin: 0, fontSize: 11.5, color: T.textSub, lineHeight: 1.4 }}>
+                Scroll down in the share sheet and tap the{" "}
+                <span
+                  style={{
+                    background: "rgba(255,255,255,0.1)",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    color: "white",
+                  }}
+                >
+                  ➕ Add to Home Screen
+                </span>{" "}
+                option.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: 15,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: "rgba(104,211,145,0.14)",
+                border: "1px solid rgba(104,211,145,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                fontSize: 13,
+                fontWeight: 800,
+                color: "#68D391",
+              }}
+            >
+              3
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: T.text }}>
+                Tap <strong style={{ color: "#9AE6B4" }}>"Add"</strong> in top right
+              </p>
+              <p style={{ margin: 0, fontSize: 11.5, color: T.textSub, lineHeight: 1.4 }}>
+                The Paymint app will appear on your iPhone screen with full-screen native mode!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Why Install Banner */}
+        <div
+          style={{
+            padding: "11px 13px",
+            borderRadius: 14,
+            background: "linear-gradient(135deg, rgba(74,158,255,0.08), rgba(232,196,106,0.06))",
+            border: "1px solid rgba(74,158,255,0.18)",
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+            <span style={{ fontSize: 12 }}>✨</span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text }}>App Benefits</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              "⚡ Zero browser URL bars",
+              "🔔 Push notification alerts",
+              "🚀 1-tap instant launch",
+              "🔒 Bank-grade encrypted",
+            ].map((perk) => (
+              <p key={perk} style={{ margin: 0, fontSize: 10.5, color: T.textSub }}>
+                {perk}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        {/* Copy Link Helper (if inside in-app browser) */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={handleCopyLink}
+            style={{
+              width: "100%",
+              padding: "11px 0",
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: copied ? "rgba(104,211,145,0.15)" : "rgba(255,255,255,0.06)",
+              color: copied ? "#68D391" : T.text,
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <span>{copied ? "✓ App URL Copied!" : "🔗 Copy App Link to open in Safari"}</span>
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={onClose}
+            style={{
+              width: "100%",
+              padding: "12px 0",
+              borderRadius: 14,
+              border: "none",
+              background: `linear-gradient(135deg, ${T.blue}, ${T.blueDeep})`,
+              color: "white",
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              boxShadow: "0 6px 20px rgba(74,158,255,0.35)",
+            }}
+          >
+            Got It
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
