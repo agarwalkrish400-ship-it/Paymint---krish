@@ -26,40 +26,56 @@ import schemaHandler from './_routes/schema.js';
 import searchAllHandler from './_routes/search_all.js';
 import searchExactHandler from './_routes/search_exact.js';
 
+function getPathname(req) {
+  let p = req.headers['x-matched-path'] || req.headers['x-forwarded-uri'] || req.headers['x-original-uri'] || req.url || '/';
+  if (req.url && req.url.startsWith('/api/') && !req.url.startsWith('/api/index.js')) {
+    p = req.url;
+  }
+  try {
+    const u = new URL(p, `http://${req.headers.host || 'localhost'}`);
+    return u.pathname.replace(/\/$/, '').toLowerCase();
+  } catch (e) {
+    return p.split('?')[0].replace(/\/$/, '').toLowerCase();
+  }
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Extract clean path from req.url
-  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-  let pathname = url.pathname.replace(/\/$/, '').toLowerCase();
+  // Parse body if passed as string/buffer
+  if (typeof req.body === 'string' && req.body.length > 0) {
+    try { req.body = JSON.parse(req.body); } catch(e){}
+  }
 
-  // Route matching
-  if (pathname === '/api/admin/auth') return adminAuth(req, res);
-  if (pathname === '/api/admin/overview') return adminOverview(req, res);
-  if (pathname === '/api/admin/redemptions') return adminRedemptions(req, res);
-  if (pathname === '/api/admin/telemetry') return adminTelemetry(req, res);
-  if (pathname === '/api/admin/transactions') return adminTransactions(req, res);
-  if (pathname === '/api/admin/users') return adminUsers(req, res);
+  const p = getPathname(req);
+  console.log('[API DISPATCH]', req.method, p);
 
-  if (pathname === '/api/rewards/claim') return rewardsClaim(req, res);
-  if (pathname === '/api/rewards/manage') return rewardsManage(req, res);
-  if (pathname === '/api/rewards') return rewardsIndex(req, res);
+  if (p.endsWith('/admin/auth')) return adminAuth(req, res);
+  if (p.endsWith('/admin/overview')) return adminOverview(req, res);
+  if (p.endsWith('/admin/redemptions')) return adminRedemptions(req, res);
+  if (p.endsWith('/admin/telemetry')) return adminTelemetry(req, res);
+  if (p.endsWith('/admin/transactions')) return adminTransactions(req, res);
+  if (p.endsWith('/admin/users')) return adminUsers(req, res);
 
-  if (pathname === '/api/users/register') return usersRegister(req, res);
-  if (pathname === '/api/users/login') return usersLogin(req, res);
-  if (pathname === '/api/users/me') return usersMe(req, res);
+  if (p.endsWith('/rewards/claim')) return rewardsClaim(req, res);
+  if (p.endsWith('/rewards/manage')) return rewardsManage(req, res);
+  if (p.endsWith('/rewards') || p.endsWith('/rewards/index')) return rewardsIndex(req, res);
 
-  if (pathname === '/api/transactions/note') return transactionsNote(req, res);
-  if (pathname === '/api/transactions') return transactionsIndex(req, res);
+  if (p.endsWith('/users/register')) return usersRegister(req, res);
+  if (p.endsWith('/users/login')) return usersLogin(req, res);
+  if (p.endsWith('/users/me')) return usersMe(req, res);
 
-  if (pathname === '/api/telemetry/log' || pathname === '/api/telemetry') return telemetryLog(req, res);
-  if (pathname === '/api/ocr') return ocrHandler(req, res);
-  if (pathname === '/api/upload') return uploadHandler(req, res);
-  if (pathname === '/api/leaderboard') return leaderboardHandler(req, res);
-  if (pathname === '/api/schema') return schemaHandler(req, res);
-  if (pathname === '/api/search_all') return searchAllHandler(req, res);
-  if (pathname === '/api/search_exact') return searchExactHandler(req, res);
+  if (p.endsWith('/transactions/note')) return transactionsNote(req, res);
+  if (p.endsWith('/transactions') || p.endsWith('/transactions/index')) return transactionsIndex(req, res);
 
-  return res.status(404).json({ error: `Not found: ${pathname}` });
+  if (p.endsWith('/telemetry/log') || p.endsWith('/telemetry')) return telemetryLog(req, res);
+  if (p.endsWith('/ocr')) return ocrHandler(req, res);
+  if (p.endsWith('/upload')) return uploadHandler(req, res);
+  if (p.endsWith('/leaderboard')) return leaderboardHandler(req, res);
+  if (p.endsWith('/schema')) return schemaHandler(req, res);
+  if (p.endsWith('/search_all')) return searchAllHandler(req, res);
+  if (p.endsWith('/search_exact')) return searchExactHandler(req, res);
+
+  return res.status(404).json({ error: `Not found: ${p}` });
 }
