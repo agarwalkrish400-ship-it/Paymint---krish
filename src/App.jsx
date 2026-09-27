@@ -5641,6 +5641,210 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATION PERMISSION MODAL — (Recommended by Krish)
+// ══════════════════════════════════════════════════════════════════════════════
+function NotificationPermissionModal({ onClose }) {
+  const handleAllow = async () => {
+    try {
+      if (typeof window !== "undefined" && "Notification" in window) {
+        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+          await Notification.requestPermission();
+        }
+      }
+    } catch(e) {
+      console.warn("Notification request error:", e);
+    }
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("paymint_notif_allowed", "true");
+        localStorage.setItem("paymint_notif_prompted", "true");
+      }
+    } catch(e) {}
+    onClose();
+  };
+
+  const handleDismiss = () => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("paymint_notif_prompted", "true");
+      }
+    } catch(e) {}
+    onClose();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.86)",
+        backdropFilter: "blur(22px)",
+        WebkitBackdropFilter: "blur(22px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        boxSizing: "border-box",
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 22, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.92, y: 12, opacity: 0 }}
+        transition={SP.bouncy}
+        style={{
+          width: "100%",
+          maxWidth: 340,
+          boxSizing: "border-box",
+          borderRadius: 24,
+          background: "linear-gradient(145deg, #111116, #0A0A0E)",
+          border: "1px solid rgba(255,255,255,0.14)",
+          padding: "26px 20px 22px",
+          textAlign: "center",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.9), 0 0 40px rgba(74,158,255,0.12)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        {/* Glow ambient background */}
+        <div
+          style={{
+            position: "absolute",
+            top: -30,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 140,
+            height: 140,
+            borderRadius: "50%",
+            background: "rgba(74,158,255,0.15)",
+            filter: "blur(36px)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Bell Icon */}
+        <div
+          style={{
+            width: 58,
+            height: 58,
+            borderRadius: 18,
+            background: "linear-gradient(135deg, rgba(74,158,255,0.2), rgba(232,196,106,0.12))",
+            border: "1px solid rgba(74,158,255,0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 14px",
+            boxShadow: "0 8px 24px rgba(74,158,255,0.2)",
+          }}
+        >
+          <motion.div
+            animate={{ rotate: [0, -12, 12, -8, 8, 0] }}
+            transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 1.5, ease: "easeInOut" }}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"
+                stroke={T.blue}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M13.73 21a2 2 0 01-3.46 0"
+                stroke={T.gold}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </motion.div>
+        </div>
+
+        {/* Title */}
+        <h3 style={{ margin: "0 0 6px", fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: "-0.02em" }}>
+          Allow Notifications
+        </h3>
+
+        {/* Recommendation Badge */}
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "4px 11px",
+            borderRadius: 20,
+            background: "rgba(232,196,106,0.14)",
+            border: "1px solid rgba(232,196,106,0.3)",
+            marginBottom: 12,
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 700, color: T.gold, letterSpacing: "0.02em" }}>
+            [Recommended by Krish]
+          </span>
+        </div>
+
+        {/* Description */}
+        <p style={{ margin: "0 0 20px", fontSize: 12.5, color: T.textSub, lineHeight: 1.5 }}>
+          Get instant alerts when you earn coins on UPI spends, unlock monthly cashback, and receive voucher codes.
+        </p>
+
+        {/* Actions */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", boxSizing: "border-box" }}>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={handleAllow}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "13px 0",
+              borderRadius: 14,
+              border: "none",
+              background: `linear-gradient(135deg, ${T.blue}, ${T.blueDeep})`,
+              color: "white",
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              boxShadow: "0 6px 20px rgba(74,158,255,0.38)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <span>Allow Notifications</span>
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={handleDismiss}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "10px 0",
+              borderRadius: 14,
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: T.textMute,
+              fontSize: 13,
+              fontWeight: 600,
+              fontFamily: "inherit",
+              cursor: "pointer",
+            }}
+          >
+            Maybe Later
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // ROOT — God Mode
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Paymint(){
@@ -5649,6 +5853,7 @@ export default function Paymint(){
   const [betaProfile,setBetaProfile]=useState(null);
   const [screen,setScreen]=useState(0);
   const [userName,setUserName]=useState("Friend");
+  const [showNotifPrompt,setShowNotifPrompt]=useState(false);
 
   const V={initial:{opacity:0,x:44,scale:0.97},animate:{opacity:1,x:0,scale:1},exit:{opacity:0,x:-44,scale:0.97}};
   const D={initial:{opacity:0,scale:0.96,filter:"blur(6px)"},animate:{opacity:1,scale:1,filter:"blur(0px)"},exit:{opacity:0,scale:1.02,filter:"blur(3px)"}};
@@ -5684,6 +5889,16 @@ export default function Paymint(){
         lc.del("beta-profile"); tokenStore.del();
         setAppMode("select_pending");
       }
+
+      // Check notification permission prompt
+      setTimeout(()=>{
+        try {
+          const prompted = localStorage.getItem("paymint_notif_prompted");
+          if (!prompted) {
+            setShowNotifPrompt(true);
+          }
+        } catch(e){}
+      }, 900);
     })();
   },[]);
 
@@ -5809,6 +6024,13 @@ export default function Paymint(){
           </motion.div>
         )}
 
+      </AnimatePresence>
+
+      {/* ── NOTIFICATION PERMISSION PROMPT ON START ── */}
+      <AnimatePresence>
+        {showNotifPrompt && (
+          <NotificationPermissionModal onClose={() => setShowNotifPrompt(false)} />
+        )}
       </AnimatePresence>
     </div>
   );
