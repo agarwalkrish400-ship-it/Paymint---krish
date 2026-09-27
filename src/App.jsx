@@ -4381,9 +4381,13 @@ function FounderDashboard({onClose, founderPw}){
           apiAdminRedemptions(founderPw),
           apiAdminGetRewards(founderPw),
         ]);
-        setData({ overview, users:allUsers||[], transactions:txns||[], redemptions:redemptions||[] });
-        setUsers(allUsers||[]);
-        setRewards(rw||[]);
+        setData({
+          overview: overview || {},
+          users: Array.isArray(allUsers) ? allUsers : [],
+          txns: Array.isArray(txns) ? txns : [],
+          redemptions: Array.isArray(redemptions) ? redemptions : []
+        });
+        setRewards(Array.isArray(rw) ? rw : []);
       } catch(err) {
         console.error('[Founder] Load failed:', err.message);
         setActionMsg("Failed to load dashboard data. Pull to refresh.");
@@ -4395,7 +4399,9 @@ function FounderDashboard({onClose, founderPw}){
 
   const refresh=()=>setRefreshKey(k=>k+1);
 
-  const {users,txns,redemptions}=data;
+  const users = Array.isArray(data?.users) ? data.users : [];
+  const txns = Array.isArray(data?.txns) ? data.txns : [];
+  const redemptions = Array.isArray(data?.redemptions) ? data.redemptions : [];
   const filtered=users.filter(u=>
     !search||
     u.name?.toLowerCase().includes(search.toLowerCase())||
