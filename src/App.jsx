@@ -477,7 +477,7 @@ function DynamicIsland({notif, onDismiss, onNavigate}){
 // ═══════════════════════════════════════════════════════════════════════════════
 // INTRO SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
-function IntroScreen({onNext}){
+function IntroScreen({onNext, onBetaTap}){
   return(
     <div style={{position:"relative",width:"100%",height:"100%",background:T.black,
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
@@ -508,7 +508,8 @@ function IntroScreen({onNext}){
         </motion.div>
         <motion.h1 initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
           transition={{duration:0.85,delay:1,...SP.gentle}}
-          style={{fontSize:54,fontWeight:800,letterSpacing:"-0.045em",color:T.text,margin:0,lineHeight:1}}>
+          onClick={onBetaTap}
+          style={{fontSize:54,fontWeight:800,letterSpacing:"-0.045em",color:T.text,margin:0,lineHeight:1,cursor:"default",userSelect:"none"}}>
           PAY<motion.span animate={{color:[T.blue,"#80BDFF",T.blue]}}
             transition={{duration:4,repeat:Infinity,ease:"easeInOut"}}>MINT</motion.span>
         </motion.h1>
@@ -2041,7 +2042,7 @@ function ChallengesSection({
 // ═══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
-function DashboardScreen({userName}){
+function DashboardScreen({userName, onBetaTap}){
   const [tab,        setTab]        = useState("home");
   const [subScreen,  setSubScreen]  = useState(null); // "weekly" | "monthly" | null
   const [plusOpen,   setPlusOpen]   = useState(false);
@@ -2191,7 +2192,7 @@ function DashboardScreen({userName}){
             <path d="M1 1h16M1 6.5h12M1 12h16" stroke={T.text} strokeWidth="1.6" strokeLinecap="round"/>
           </svg>
         </motion.button>
-        <span style={{fontSize:17,fontWeight:800,letterSpacing:"-0.02em",color:T.text}}>
+        <span onClick={onBetaTap} style={{fontSize:17,fontWeight:800,letterSpacing:"-0.02em",color:T.text,cursor:"default",userSelect:"none"}}>
           PAY<span style={{color:T.blue}}>MINT</span>
         </span>
         <motion.button whileTap={{scale:0.92}} onClick={()=>setTab("wallet")}
@@ -2838,7 +2839,7 @@ async function apiUploadScreenshot(file) {
 // ══════════════════════════════════════════════════════════════════════════════
 // EXPERIENCE SELECTION
 // ══════════════════════════════════════════════════════════════════════════════
-function ExperienceSelect({onBeta,onPrototype}){
+function ExperienceSelect({onBeta,onPrototype,onBetaTap}){
   return(
     <div style={{position:"relative",width:"100%",height:"100%",background:T.black,
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -2847,7 +2848,8 @@ function ExperienceSelect({onBeta,onPrototype}){
       <Glow x={50} y={40} color="rgba(74,158,255,0.12)" size={600}/>
       <motion.div initial={{opacity:0,y:-20,scale:0.85}} animate={{opacity:1,y:0,scale:1}}
         transition={{duration:0.6,...SP.bouncy}}
-        style={{marginBottom:10,display:"flex",alignItems:"center",gap:12,position:"relative",zIndex:10}}>
+        onClick={onBetaTap}
+        style={{marginBottom:10,display:"flex",alignItems:"center",gap:12,position:"relative",zIndex:10,cursor:"default",userSelect:"none"}}>
         <LogoBadge size={40}/>
         <span style={{fontSize:22,fontWeight:800,letterSpacing:"-0.03em",color:T.text}}>
           PAY<span style={{color:T.blue}}>MINT</span>
@@ -2935,7 +2937,7 @@ function ExperienceSelect({onBeta,onPrototype}){
 // ══════════════════════════════════════════════════════════════════════════════
 // BETA PROFILE SETUP
 // ══════════════════════════════════════════════════════════════════════════════
-function BetaProfileSetup({onDone}){
+function BetaProfileSetup({onDone, onBetaTap}){
   const [form,setForm]=useState({name:"",age:"",occupation:"",email:""});
   const [errors,setErrors]=useState({});
   const [saving,setSaving]=useState(false);
@@ -2977,7 +2979,9 @@ function BetaProfileSetup({onDone}){
       <Glow x={70} y={8} color="rgba(74,158,255,0.07)" size={360}/>
       <motion.div initial={{opacity:0,y:-16}} animate={{opacity:1,y:0}} transition={{duration:0.45}}
         style={{padding:"52px 24px 0",flexShrink:0}}>
-        <LogoBadge size={30}/>
+        <div onClick={onBetaTap} style={{cursor:"default",userSelect:"none",display:"inline-block"}}>
+          <LogoBadge size={30}/>
+        </div>
         <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:0.2}} style={{marginTop:20}}>
           <p style={{margin:"0 0 5px",fontSize:12,color:T.blue,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>Welcome</p>
           <h2 style={{margin:"0 0 6px",fontSize:26,fontWeight:800,color:T.text,letterSpacing:"-0.03em",lineHeight:1.2}}>
@@ -4729,7 +4733,7 @@ function DismissTimer({id,onDismiss}){
   return null;
 }
 
-function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
+function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap}){
   const [tab,setTab]=useState("home");
   const [coins,setCoins]=useState(parseFloat(Number(profile.coin_balance||0).toFixed(1)));
   const [txns,setTxns]=useState([]);
@@ -5236,7 +5240,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
         </motion.button>
 
         {/* 5-tap founder trigger */}
-        <motion.span onClick={handleTitleTap}
+        <motion.span onClick={onBetaTap || handleTitleTap}
           style={{fontSize:15,fontWeight:800,letterSpacing:"0.04em",cursor:"default",
             userSelect:"none",WebkitUserSelect:"none"}}>
           <span style={{color:T.text}}>PAYMINT </span>
@@ -6245,6 +6249,9 @@ function NotificationPermissionModal({ onClose }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ROOT — God Mode
 // ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// ROOT — God Mode & Universal 5-Tap Founder Access
+// ══════════════════════════════════════════════════════════════════════════════
 export default function Paymint(){
   const [appMode,setAppMode]=useState("loading"); // loading|select_pending|select|beta|prototype
   const [betaStep,setBetaStep]=useState("profile");
@@ -6253,38 +6260,78 @@ export default function Paymint(){
   const [userName,setUserName]=useState("Friend");
   const [showNotifPrompt,setShowNotifPrompt]=useState(false);
 
+  // Global 5-tap founder state
+  const [founderOpen,setFounderOpen]=useState(false);
+  const [showPwModal,setShowPwModal]=useState(false);
+  const [pw,setPw]=useState("");
+  const [founderPw,setFounderPw]=useState("");
+  const [pwErr,setPwErr]=useState("");
+  const tapCount=useRef(0);
+  const tapTimer=useRef(null);
+
+  const triggerFounder5Tap=()=>{
+    tapCount.current++;
+    if(tapTimer.current) clearTimeout(tapTimer.current);
+    tapTimer.current=setTimeout(()=>{tapCount.current=0;}, 2000);
+    if(tapCount.current>=5){
+      tapCount.current=0;
+      setShowPwModal(true);
+    }
+  };
+
+  const handlePwSubmit=async()=>{
+    const ok = await apiAdminAuth(pw);
+    if(ok){
+      setShowPwModal(false);
+      setFounderPw(pw);
+      setPw("");
+      setPwErr("");
+      setFounderOpen(true);
+    } else {
+      setPwErr("Incorrect password.");
+    }
+  };
+
   const V={initial:{opacity:0,x:44,scale:0.97},animate:{opacity:1,x:0,scale:1},exit:{opacity:0,x:-44,scale:0.97}};
   const D={initial:{opacity:0,scale:0.96,filter:"blur(6px)"},animate:{opacity:1,scale:1,filter:"blur(0px)"},exit:{opacity:0,scale:1.02,filter:"blur(3px)"}};
   const go=n=>setScreen(n);
 
   useEffect(()=>{
-    (async()=>{
-      // 1. Check localStorage cache (instant load)
-      let profile = await lc.get("beta-profile");
-      const token = tokenStore.get();
-      console.log("[ROOT] profile:", profile?.email||"none", "token:", token?"YES":"NO");
+    let resolved = false;
+    const safetyTimer = setTimeout(()=>{
+      if(!resolved) {
+        setAppMode(prev => prev === "loading" ? "select_pending" : prev);
+      }
+    }, 800);
 
-      if(profile?.email && token){
-        try {
-        setBetaProfile(profile);
-        setUserName(profile.name?.split(" ")[0]||"Friend");
-        setAppMode("beta");
-        setBetaStep("dashboard");
-        // Background refresh from API
-        apiGetMe().then(fresh=>{
-          if(fresh && !fresh.error){
-            const merged={...profile,...fresh};
-            lc.set("beta-profile", merged);
-            setBetaProfile(merged);
-          }
-        }).catch(()=>{});
-        } catch(err) {
-          console.error("[Root] Startup failed:", err.message);
-          lc.del("beta-profile"); tokenStore.del();
+    (async()=>{
+      try {
+        let profile = await lc.get("beta-profile");
+        const token = tokenStore.get();
+        resolved = true;
+        clearTimeout(safetyTimer);
+        console.log("[ROOT] profile:", profile?.email||"none", "token:", token?"YES":"NO");
+
+        if(profile?.email && token){
+          setBetaProfile(profile);
+          setUserName(profile.name?.split(" ")[0]||"Friend");
+          setAppMode("beta");
+          setBetaStep("dashboard");
+          // Background refresh from API
+          apiGetMe().then(fresh=>{
+            if(fresh && !fresh.error){
+              const merged={...profile,...fresh};
+              lc.set("beta-profile", merged);
+              setBetaProfile(merged);
+            }
+          }).catch(()=>{});
+        } else {
           setAppMode("select_pending");
         }
-      } else {
-        lc.del("beta-profile"); tokenStore.del();
+      } catch(err) {
+        resolved = true;
+        clearTimeout(safetyTimer);
+        console.error("[Root] Startup:", err.message);
         setAppMode("select_pending");
       }
 
@@ -6298,6 +6345,8 @@ export default function Paymint(){
         } catch(e){}
       }, 900);
     })();
+
+    return () => clearTimeout(safetyTimer);
   },[]);
 
   return(
@@ -6359,7 +6408,7 @@ export default function Paymint(){
                 <motion.div key="intro-sp" initial={{opacity:0}} animate={{opacity:1}}
                   exit={{opacity:0,scale:1.03,filter:"blur(4px)"}} transition={{duration:0.4}}
                   style={{position:"absolute",inset:0}}>
-                  <IntroScreen onNext={()=>setAppMode("select")}/>
+                  <IntroScreen onNext={()=>setAppMode("select")} onBetaTap={triggerFounder5Tap}/>
                 </motion.div>
               )}
               {appMode==="select"&&(
@@ -6369,6 +6418,7 @@ export default function Paymint(){
                   <ExperienceSelect
                     onBeta={()=>{setAppMode("beta");setBetaStep("profile");}}
                     onPrototype={()=>{setAppMode("prototype");go(1);}}
+                    onBetaTap={triggerFounder5Tap}
                   />
                 </motion.div>
               )}
@@ -6383,7 +6433,10 @@ export default function Paymint(){
               {betaStep==="profile"&&(
                 <motion.div key="bp" variants={V} initial="initial" animate="animate" exit="exit"
                   transition={SP.gentle} style={{position:"absolute",inset:0}}>
-                  <BetaProfileSetup onDone={(p)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep("how");}}/>
+                  <BetaProfileSetup
+                    onDone={(p)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep("how");}}
+                    onBetaTap={triggerFounder5Tap}
+                  />
                 </motion.div>
               )}
               {betaStep==="how"&&(
@@ -6399,6 +6452,7 @@ export default function Paymint(){
                     profile={betaProfile}
                     onExplorePrototype={()=>{setAppMode("prototype");go(1);}}
                     onUpdateProfile={(p)=>setBetaProfile(p)}
+                    onBetaTap={triggerFounder5Tap}
                   />
                 </motion.div>
               )}
@@ -6411,13 +6465,13 @@ export default function Paymint(){
             transition={{duration:0.45}} style={{position:"absolute",inset:0}}>
             <StepBar current={screen}/>
             <AnimatePresence mode="wait">
-              {screen===0&&(<motion.div key="i" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{position:"absolute",inset:0}}><IntroScreen onNext={()=>go(1)}/></motion.div>)}
+              {screen===0&&(<motion.div key="i" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{position:"absolute",inset:0}}><IntroScreen onNext={()=>go(1)} onBetaTap={triggerFounder5Tap}/></motion.div>)}
               {screen===1&&(<motion.div key="a" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{position:"absolute",inset:0}}><AccountScreen onNext={n=>{setUserName(n);go(2);}}/></motion.div>)}
               {screen===2&&(<motion.div key="c" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{position:"absolute",inset:0}}><ConnectScreen onNext={()=>go(3)}/></motion.div>)}
               {screen===3&&(<motion.div key="l" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{position:"absolute",inset:0}}><LoadingScreen onDone={()=>go(4)}/></motion.div>)}
               {screen===4&&(<motion.div key="w" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{position:"absolute",inset:0}}><WelcomeScreen userName={userName} onNext={()=>go(5)}/></motion.div>)}
               {screen===5&&(<motion.div key="o" variants={V} initial="initial" animate="animate" exit="exit" transition={{duration:0.55,ease:[0.4,0,0.2,1]}} style={{position:"absolute",inset:0}}><OnboardingCards onDone={()=>go(6)}/></motion.div>)}
-              {screen===6&&(<motion.div key="d" variants={D} initial="initial" animate="animate" exit="exit" transition={{duration:0.7,...SP.slow}} style={{position:"absolute",inset:0}}><DashboardScreen userName={userName}/></motion.div>)}
+              {screen===6&&(<motion.div key="d" variants={D} initial="initial" animate="animate" exit="exit" transition={{duration:0.7,...SP.slow}} style={{position:"absolute",inset:0}}><DashboardScreen userName={userName} onBetaTap={triggerFounder5Tap}/></motion.div>)}
             </AnimatePresence>
           </motion.div>
         )}
@@ -6428,6 +6482,149 @@ export default function Paymint(){
       <AnimatePresence>
         {showNotifPrompt && (
           <NotificationPermissionModal onClose={() => setShowNotifPrompt(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── GLOBAL PASSWORD MODAL (Triggered only by 5-tap on BETA / LOGO) ── */}
+      <AnimatePresence>
+        {showPwModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 10000,
+              background: "rgba(0,0,0,0.88)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+              boxSizing: "border-box",
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={SP.bouncy}
+              style={{
+                width: "100%",
+                maxWidth: 320,
+                boxSizing: "border-box",
+                borderRadius: 22,
+                background: "#0D0D11",
+                border: "1px solid rgba(255,255,255,0.12)",
+                padding: "24px 18px",
+                boxShadow: "0 24px 60px rgba(0,0,0,0.9)",
+              }}
+            >
+              <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 800, color: T.text, textAlign: "center" }}>
+                Enter Password
+              </h3>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handlePwSubmit();
+                }}
+                style={{ width: "100%", boxSizing: "border-box", margin: 0 }}
+              >
+                <input
+                  type="password"
+                  value={pw}
+                  onChange={(e) => {
+                    setPw(e.target.value);
+                    setPwErr("");
+                  }}
+                  placeholder="••••••••"
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "13px 14px",
+                    borderRadius: 12,
+                    border: `1px solid ${T.glassBorder}`,
+                    background: "rgba(255,255,255,0.05)",
+                    color: T.text,
+                    fontSize: 16,
+                    fontFamily: "inherit",
+                    textAlign: "center",
+                    letterSpacing: "0.2em",
+                    outline: "none",
+                    caretColor: T.blue,
+                    boxSizing: "border-box",
+                    marginBottom: 4,
+                  }}
+                />
+                {pwErr && (
+                  <p style={{ margin: "6px 0 4px", fontSize: 12, color: T.error, textAlign: "center" }}>
+                    {pwErr}
+                  </p>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12, width: "100%", boxSizing: "border-box" }}>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => {
+                      setShowPwModal(false);
+                      setPw("");
+                      setPwErr("");
+                    }}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "12px 0",
+                      borderRadius: 12,
+                      background: "rgba(255,255,255,0.06)",
+                      border: `1px solid ${T.glassBorder}`,
+                      color: T.textSub,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                      textAlign: "center",
+                    }}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    type="submit"
+                    whileTap={{ scale: 0.96 }}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "12px 0",
+                      borderRadius: 12,
+                      border: "none",
+                      background: `linear-gradient(135deg, ${T.blue}, ${T.blueDeep})`,
+                      color: "white",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      boxShadow: "0 4px 16px rgba(74,158,255,0.35)",
+                    }}
+                  >
+                    Enter
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── GLOBAL FOUNDER DASHBOARD ── */}
+      <AnimatePresence>
+        {founderOpen && (
+          <FounderDashboard
+            key="founder"
+            onClose={() => setFounderOpen(false)}
+            founderPw={founderPw}
+          />
         )}
       </AnimatePresence>
     </div>
