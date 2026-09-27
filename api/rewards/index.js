@@ -90,15 +90,24 @@ export default async function handler(req, res) {
   }
   if (req.method === 'POST') {
     if (!isFounder(req)) return res.status(403).json({ error: 'Forbidden' });
-    const { brand, label, cost_coins, codes } = req.body || {};
-    if (!brand||!label||!cost_coins||!codes?.length)
+    let { brand, label, cost_coins, codes, quantity } = req.body || {};
+    if (!brand || !label || !cost_coins)
       return res.status(400).json({ error: 'Missing fields' });
+    
+    // Support quantity parameter directly (e.g. quantity: 3 or 5)
+    if (!codes || !Array.isArray(codes) || codes.length === 0) {
+      const qty = Math.min(100, Math.max(1, Number(quantity) || 1));
+      const prefix = brand.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'REWD';
+      codes = Array.from({ length: qty }).map((_, i) =>
+        `${prefix}-SIM-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${i + 1}`
+      );
+    }
     try {
       await Promise.all(codes.map(code =>
         sql`INSERT INTO rewards (brand,label,cost_coins,code,stock,active)
             VALUES (${brand},${label},${Number(cost_coins)},${code.trim()},1,true)`
       ));
-      return res.status(201).json({ inserted: codes.length });
+      return res.status(201).json({ inserted: codes.length, codes });
     } catch(err) {
       console.error('[/api/rewards POST]', err.message);
       return res.status(500).json({ error: 'Failed to add reward codes' });

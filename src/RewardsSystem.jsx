@@ -2171,57 +2171,86 @@ export function FounderRewardsTab({
                 </div>
               </div>
 
-              {/* NUMBER OF COUPONS (MIN: 1, MAX: 10) */}
+              {/* VOUCHER / COUPON QUANTITY TO LIST AT ONCE */}
               <div
                 style={{
-                  background: "rgba(74,158,255,0.05)",
-                  border: "1px solid rgba(74,158,255,0.18)",
+                  background: "rgba(74,158,255,0.06)",
+                  border: "1px solid rgba(74,158,255,0.22)",
                   borderRadius: 14,
-                  padding: "12px",
+                  padding: "13px 14px",
                   marginBottom: 16,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                   <div>
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.blue }}>
-                      NUMBER OF COUPONS (MIN: 1, MAX: 10)
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: T.blue, letterSpacing: "0.02em" }}>
+                      VOUCHER / COUPON QUANTITY TO LIST
                     </p>
-                    <p style={{ margin: "2px 0 0", fontSize: 10.5, color: T.textMute }}>
-                      Selected: <strong style={{ color: T.gold }}>{batchCodeCount} coupons</strong>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textSub }}>
+                      Quantity: <strong style={{ color: T.gold }}>{batchCodeCount} {batchCodeCount === 1 ? 'voucher' : 'vouchers'}</strong> will be created at once
                     </p>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <button
                       type="button"
-                      onClick={() => setBatchCodeCount((c) => Math.max(1, c - 1))}
+                      onClick={() => setBatchCodeCount((c) => Math.max(1, Number(c) - 1))}
                       style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 6,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 7,
                         background: T.glass,
                         border: `1px solid ${T.glassBorder}`,
                         color: T.text,
                         cursor: "pointer",
                         fontWeight: 800,
+                        fontSize: 14,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
                       -
                     </button>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: T.text, minWidth: 16, textAlign: "center" }}>
-                      {batchCodeCount}
-                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={batchCodeCount}
+                      onChange={(e) => {
+                        const val = Math.max(1, Math.min(100, Number(e.target.value) || 1));
+                        setBatchCodeCount(val);
+                      }}
+                      style={{
+                        width: 44,
+                        height: 28,
+                        borderRadius: 7,
+                        background: "rgba(255,255,255,0.08)",
+                        border: `1px solid ${T.blue}`,
+                        color: T.text,
+                        fontSize: 13,
+                        fontWeight: 800,
+                        textAlign: "center",
+                        outline: "none",
+                        fontFamily: "inherit",
+                        boxSizing: "border-box",
+                      }}
+                    />
                     <button
                       type="button"
-                      onClick={() => setBatchCodeCount((c) => Math.min(10, c + 1))}
+                      onClick={() => setBatchCodeCount((c) => Math.min(100, Number(c) + 1))}
                       style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 6,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 7,
                         background: T.glass,
                         border: `1px solid ${T.glassBorder}`,
                         color: T.text,
                         cursor: "pointer",
                         fontWeight: 800,
+                        fontSize: 14,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
                       +
@@ -2229,22 +2258,23 @@ export function FounderRewardsTab({
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 3, marginBottom: 10 }}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((cnt) => (
+                {/* Quick Quantity Chips (1, 2, 3, 5, 10, 15, 20, 25, 50) */}
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 50].map((cnt) => (
                     <button
                       key={cnt}
                       type="button"
                       onClick={() => setBatchCodeCount(cnt)}
                       style={{
-                        padding: "6px 0",
-                        borderRadius: 6,
-                        background: batchCodeCount === cnt ? T.blue : "rgba(255,255,255,0.05)",
-                        color: batchCodeCount === cnt ? "white" : T.textSub,
-                        border: `1px solid ${batchCodeCount === cnt ? T.blue : "rgba(255,255,255,0.08)"}`,
+                        padding: "5px 8px",
+                        borderRadius: 8,
+                        background: Number(batchCodeCount) === cnt ? `linear-gradient(135deg, ${T.blue}, ${T.blueDeep})` : "rgba(255,255,255,0.05)",
+                        color: Number(batchCodeCount) === cnt ? "white" : T.textSub,
+                        border: `1px solid ${Number(batchCodeCount) === cnt ? T.blue : "rgba(255,255,255,0.08)"}`,
                         fontSize: 11,
                         fontWeight: 700,
                         cursor: "pointer",
-                        textAlign: "center",
+                        fontFamily: "inherit",
                       }}
                     >
                       {cnt}
@@ -2257,11 +2287,11 @@ export function FounderRewardsTab({
                   onClick={handleGenerateSimulationCodes}
                   style={{
                     width: "100%",
-                    padding: "8px",
-                    borderRadius: 8,
-                    background: "rgba(74,158,255,0.15)",
+                    padding: "8px 10px",
+                    borderRadius: 9,
+                    background: "rgba(74,158,255,0.14)",
                     border: "1px solid rgba(74,158,255,0.3)",
-                    color: T.blue,
+                    color: "#80C4FF",
                     fontSize: 12,
                     fontWeight: 700,
                     cursor: "pointer",
@@ -2269,14 +2299,14 @@ export function FounderRewardsTab({
                     marginBottom: 8,
                   }}
                 >
-                  ⚡ Generate {batchCodeCount} Branded Simulation Codes
+                  ⚡ Auto-Generate {batchCodeCount} Branded Voucher Codes
                 </motion.button>
 
                 <textarea
                   value={customCodes}
                   onChange={(e) => setCustomCodes(e.target.value)}
                   rows={4}
-                  placeholder={`AMZN-SIM-XXXX-1\nAMZN-SIM-XXXX-2\n(or click generate above)`}
+                  placeholder={`AMZN-SIM-XXXX-1\nAMZN-SIM-XXXX-2\nAMZN-SIM-XXXX-3\n(or click Auto-Generate above to create ${batchCodeCount} codes)`}
                   style={{
                     width: "100%",
                     padding: "8px 10px",
@@ -2284,7 +2314,7 @@ export function FounderRewardsTab({
                     border: `1px solid ${T.glassBorder}`,
                     background: T.glass,
                     color: T.text,
-                    fontSize: 16,
+                    fontSize: 13,
                     fontFamily: "monospace",
                     resize: "vertical",
                     boxSizing: "border-box",
@@ -2307,6 +2337,7 @@ export function FounderRewardsTab({
                     fontSize: 13,
                     fontWeight: 600,
                     cursor: "pointer",
+                    fontFamily: "inherit",
                   }}
                 >
                   Cancel
@@ -2325,9 +2356,11 @@ export function FounderRewardsTab({
                     fontSize: 13,
                     fontWeight: 800,
                     cursor: "pointer",
+                    fontFamily: "inherit",
+                    boxShadow: "0 4px 16px rgba(74,158,255,0.35)",
                   }}
                 >
-                  {isPublishing ? "Publishing…" : "Publish Reward to Store"}
+                  {isPublishing ? "Publishing…" : `Publish ${batchCodeCount} Vouchers to Store`}
                 </motion.button>
               </div>
             </motion.div>
@@ -2423,53 +2456,87 @@ export function FounderRewardsTab({
                     />
                   </div>
 
-                  {/* Manage Actions */}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <motion.button
-                      whileTap={{ scale: 0.94 }}
-                      onClick={async () => {
-                        const newActive = g.active === 0;
-                        if (onManageReward) {
-                          await onManageReward("toggle", g.brand, g.label, { active: newActive }, founderPw);
-                        }
-                        if (onRefresh) await onRefresh();
-                      }}
-                      style={{
-                        padding: "5px 10px",
-                        borderRadius: 8,
-                        background: g.active > 0 ? "rgba(255,96,88,0.08)" : "rgba(0,255,136,0.08)",
-                        border: `1px solid ${g.active > 0 ? "rgba(255,96,88,0.2)" : "rgba(0,255,136,0.2)"}`,
-                        color: g.active > 0 ? T.error : "#00FF88",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {g.active > 0 ? "Deactivate" : "Activate"}
-                    </motion.button>
+                  {/* Manage Actions & Quick Quantity Add */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10.5, color: T.textMute, fontWeight: 600 }}>+ Stock Quantity:</span>
+                    {[3, 5, 10].map((addQty) => (
+                      <motion.button
+                        key={addQty}
+                        whileTap={{ scale: 0.92 }}
+                        onClick={async () => {
+                          const brandPrefix = g.brand.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'REWD';
+                          const newCodes = Array.from({ length: addQty }).map((_, i) =>
+                            `${brandPrefix}-SIM-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${i + 1}`
+                          );
+                          if (onBulkAddCodes) {
+                            await onBulkAddCodes(g.brand, g.label, g.cost_coins, newCodes, founderPw);
+                          }
+                          if (onRefresh) await onRefresh();
+                          if (setActionMsg) setActionMsg(`Added +${addQty} vouchers to ${g.brand} (${g.label}).`);
+                        }}
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: 7,
+                          background: "rgba(74,158,255,0.1)",
+                          border: "1px solid rgba(74,158,255,0.25)",
+                          color: "#80C4FF",
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        +{addQty} Vouchers
+                      </motion.button>
+                    ))}
 
-                    <motion.button
-                      whileTap={{ scale: 0.94 }}
-                      onClick={async () => {
-                        if (!window.confirm(`Delete ALL ${g.total} code(s) for ${g.brand} ${g.label}?`)) return;
-                        if (onManageReward) {
-                          await onManageReward("delete", g.brand, g.label, {}, founderPw);
-                        }
-                        if (onRefresh) await onRefresh();
-                      }}
-                      style={{
-                        padding: "5px 10px",
-                        borderRadius: 8,
-                        background: "rgba(255,96,88,0.07)",
-                        border: "1px solid rgba(255,96,88,0.18)",
-                        color: T.error,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete
-                    </motion.button>
+                    <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                      <motion.button
+                        whileTap={{ scale: 0.94 }}
+                        onClick={async () => {
+                          const newActive = g.active === 0;
+                          if (onManageReward) {
+                            await onManageReward("toggle", g.brand, g.label, { active: newActive }, founderPw);
+                          }
+                          if (onRefresh) await onRefresh();
+                        }}
+                        style={{
+                          padding: "5px 10px",
+                          borderRadius: 8,
+                          background: g.active > 0 ? "rgba(255,96,88,0.08)" : "rgba(0,255,136,0.08)",
+                          border: `1px solid ${g.active > 0 ? "rgba(255,96,88,0.2)" : "rgba(0,255,136,0.2)"}`,
+                          color: g.active > 0 ? T.error : "#00FF88",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {g.active > 0 ? "Deactivate" : "Activate"}
+                      </motion.button>
+
+                      <motion.button
+                        whileTap={{ scale: 0.94 }}
+                        onClick={async () => {
+                          if (!window.confirm(`Delete ALL ${g.total} code(s) for ${g.brand} ${g.label}?`)) return;
+                          if (onManageReward) {
+                            await onManageReward("delete", g.brand, g.label, {}, founderPw);
+                          }
+                          if (onRefresh) await onRefresh();
+                        }}
+                        style={{
+                          padding: "5px 10px",
+                          borderRadius: 8,
+                          background: "rgba(255,96,88,0.07)",
+                          border: "1px solid rgba(255,96,88,0.18)",
+                          color: T.error,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </motion.button>
+                    </div>
                   </div>
                 </div>
               </div>
