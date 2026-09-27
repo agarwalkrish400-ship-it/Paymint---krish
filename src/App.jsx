@@ -2653,8 +2653,15 @@ function setCookie(name, value, days = 365) {
 }
 function getCookie(name) {
   try {
-    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-    return match ? decodeURIComponent(match[2]) : null;
+    if (!document.cookie) return null;
+    const cookies = document.cookie.split('; ');
+    for (const c of cookies) {
+      const idx = c.indexOf('=');
+      if (idx !== -1 && c.substring(0, idx).trim() === name) {
+        return decodeURIComponent(c.substring(idx + 1));
+      }
+    }
+    return null;
   } catch(e) { return null; }
 }
 function delCookie(name) {
@@ -2663,26 +2670,31 @@ function delCookie(name) {
   } catch(e){}
 }
 
-// ── Token storage ─────────────────────────────────────────────────────────────
+// ── Token storage (localStorage + sessionStorage + cookie) ────────────────────
 const tokenStore = {
   get: () => {
     try {
-      return localStorage.getItem('pm_token') || getCookie('pm_token') || null;
+      return localStorage.getItem('pm_token') || sessionStorage.getItem('pm_token') || getCookie('pm_token') || null;
     } catch {
       return getCookie('pm_token') || null;
     }
   },
   set: (t) => {
     try {
-      localStorage.setItem('pm_token', t);
-      setCookie('pm_token', t, 365);
+      if (t) {
+        localStorage.setItem('pm_token', t);
+        sessionStorage.setItem('pm_token', t);
+        setCookie('pm_token', t, 365);
+      }
     } catch {
-      setCookie('pm_token', t, 365);
+      try { if (t) sessionStorage.setItem('pm_token', t); } catch(e){}
+      if (t) setCookie('pm_token', t, 365);
     }
   },
   del: () => {
     try {
       localStorage.removeItem('pm_token');
+      sessionStorage.removeItem('pm_token');
       delCookie('pm_token');
     } catch {
       delCookie('pm_token');
@@ -2690,11 +2702,11 @@ const tokenStore = {
   },
 };
 
-// ── localStorage & cookie cache helper (UI speed & persistence) ───────────────
+// ── Multi-layer persistence cache helper ──────────────────────────────────────
 const lc = {
   get: async (k) => {
     try {
-      const v = localStorage.getItem(k);
+      const v = localStorage.getItem(k) || sessionStorage.getItem(k);
       if (v) return JSON.parse(v);
       const ck = getCookie(k);
       return ck ? JSON.parse(ck) : null;
@@ -2709,15 +2721,32 @@ const lc = {
     try {
       const str = JSON.stringify(v);
       localStorage.setItem(k, str);
+      sessionStorage.setItem(k, str);
       setCookie(k, str, 365);
+      if (k === 'beta-profile' && v && v.email) {
+        localStorage.setItem('pm_user_email', v.email);
+        sessionStorage.setItem('pm_user_email', v.email);
+        setCookie('pm_user_email', v.email, 365);
+        localStorage.setItem('pm_profile', str);
+        localStorage.setItem('paymint_user', str);
+      }
     } catch {
-      try { setCookie(k, JSON.stringify(v), 365); } catch {}
+      try { sessionStorage.setItem(k, JSON.stringify(v)); } catch(e){}
+      try { setCookie(k, JSON.stringify(v), 365); } catch(e){}
     }
   },
   del: async (k) => {
     try {
       localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
       delCookie(k);
+      if (k === 'beta-profile') {
+        localStorage.removeItem('pm_user_email');
+        sessionStorage.removeItem('pm_user_email');
+        delCookie('pm_user_email');
+        localStorage.removeItem('pm_profile');
+        localStorage.removeItem('paymint_user');
+      }
     } catch {
       delCookie(k);
     }
@@ -4891,7 +4920,7 @@ function DismissTimer({id,onDismiss}){
   return null;
 }
 
-function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap}){
+function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onLogout}){
   const [tab,setTab]=useState("home");
   const [coins,setCoins]=useState(parseFloat(Number(profile.coin_balance||0).toFixed(1)));
   const [txns,setTxns]=useState([]);
@@ -5803,21 +5832,25 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap}){
                   {l:"Profile",           ico:"user",   fn:()=>{setTab("profile");setMenuOpen(false);}},
                   {l:"Leaderboard",       ico:"trophy", fn:()=>{setTab("leaderboard");setMenuOpen(false);}},
                   {l:"Explore Prototype", ico:"grid",   fn:()=>{setMenuOpen(false);onExplorePrototype();}},
+                  {l:"Sign Out",          ico:"logout", fn:()=>{setMenuOpen(false);if(onLogout)onLogout();}, danger:true},
                 ].map(item=>(
                   <motion.button key={item.l} whileTap={{scale:0.97}} onClick={item.fn}
                     style={{width:"100%",display:"flex",alignItems:"center",gap:11,padding:"12px 10px",
                       borderRadius:12,background:"none",border:"none",cursor:"pointer",marginBottom:3,
                       textAlign:"left",fontFamily:"inherit"}}>
-                    <div style={{width:30,height:30,borderRadius:8,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                    <div style={{width:30,height:30,borderRadius:8,
+                      background:item.danger?"rgba(255,96,88,0.08)":T.glass,
+                      border:`1px solid ${item.danger?"rgba(255,96,88,0.2)":T.glassBorder}`,
                       display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                       {item.ico==="download"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4.5 7l3.5 3.5L11.5 7M2 12v1.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V12" stroke={T.blue} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                       {item.ico==="user"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke={T.textSub} strokeWidth="1.3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke={T.textSub} strokeWidth="1.3" strokeLinecap="round"/></svg>}
                       {item.ico==="trophy"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l1.4 2.9 3.2.47-2.3 2.25.54 3.18L8 8.75l-2.84 1.55.54-3.18L3.4 4.87l3.2-.47z" stroke={T.gold} strokeWidth="1.2" strokeLinejoin="round"/></svg>}
                       {item.ico==="grid"&&<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke={T.blue} strokeWidth="1.2"/></svg>}
+                      {item.ico==="logout"&&<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke={T.error||"#ff5555"} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                     </div>
-                    <span style={{fontSize:13.5,fontWeight:600,color:T.text}}>{item.l}</span>
+                    <span style={{fontSize:13.5,fontWeight:600,color:item.danger?T.error:T.text}}>{item.l}</span>
                     <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style={{marginLeft:"auto"}}>
-                      <path d="M3.5 2l4 3.5-4 3.5" stroke={T.textMute} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3.5 2l4 3.5-4 3.5" stroke={item.danger?T.error:T.textMute} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </motion.button>
                 ))}
@@ -6415,9 +6448,26 @@ function NotificationPermissionModal({ onClose }) {
 // ══════════════════════════════════════════════════════════════════════════════
 const getStoredProfile = () => {
   try {
-    const raw = localStorage.getItem('beta-profile') || getCookie('beta-profile') || getCookie('pm_profile');
-    return raw ? JSON.parse(raw) : null;
-  } catch(e) { return null; }
+    const raw = localStorage.getItem('beta-profile') || 
+                sessionStorage.getItem('beta-profile') || 
+                localStorage.getItem('pm_profile') || 
+                localStorage.getItem('paymint_user') || 
+                getCookie('beta-profile') || 
+                getCookie('pm_profile');
+    if (raw) {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (parsed && (parsed.email || parsed.id)) return parsed;
+    }
+    const savedEmail = localStorage.getItem('pm_user_email') || 
+                       sessionStorage.getItem('pm_user_email') || 
+                       getCookie('pm_user_email');
+    if (savedEmail && typeof savedEmail === 'string' && savedEmail.includes('@')) {
+      const namePart = savedEmail.split('@')[0].replace(/[._-]/g, ' ');
+      const name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+      return { email: savedEmail.trim(), name, coin_balance: 0 };
+    }
+  } catch(e) {}
+  return null;
 };
 
 export default function Paymint(){
@@ -6437,6 +6487,21 @@ export default function Paymint(){
   const [pwErr,setPwErr]=useState("");
   const tapCount=useRef(0);
   const tapTimer=useRef(null);
+
+  const handleLogout = async () => {
+    tokenStore.del();
+    await lc.del("beta-profile");
+    try {
+      localStorage.removeItem("pm_user_email");
+      sessionStorage.removeItem("pm_user_email");
+      delCookie("pm_user_email");
+      localStorage.removeItem("pm_profile");
+      localStorage.removeItem("paymint_user");
+    } catch(e){}
+    setBetaProfile(null);
+    setAppMode("select_pending");
+    setBetaStep("profile");
+  };
 
   const triggerFounder5Tap=()=>{
     tapCount.current++;
@@ -6469,24 +6534,56 @@ export default function Paymint(){
     (async()=>{
       try {
         let profile = await lc.get("beta-profile");
+        if (!profile) profile = getStoredProfile();
+        const savedEmail = profile?.email || localStorage.getItem('pm_user_email') || getCookie('pm_user_email');
         const token = tokenStore.get();
-        console.log("[ROOT] profile:", profile?.email||"none", "token:", token?"YES":"NO");
+        console.log("[ROOT] session restore - profile:", profile?.email||"none", "token:", token?"YES":"NO", "savedEmail:", savedEmail||"none");
 
-        if(profile?.email){
+        if(profile && profile.email){
           setBetaProfile(profile);
           setUserName(profile.name?.split(" ")[0]||"Friend");
           setAppMode("beta");
           setBetaStep("dashboard");
         }
 
-        // Background refresh from API
+        // Auto-heal / Silent refresh from API
         if(token){
-          apiGetMe().then(fresh=>{
+          apiGetMe().then(async fresh => {
             if(fresh && !fresh.error && fresh.email){
-              const merged={...(profile||{}), ...fresh};
-              lc.set("beta-profile", merged);
+              const merged = { ...(profile || {}), ...fresh };
+              await lc.set("beta-profile", merged);
               setBetaProfile(merged);
               setUserName(merged.name?.split(" ")[0]||"Friend");
+              setAppMode("beta");
+              setBetaStep("dashboard");
+            } else if(savedEmail) {
+              // Token expired, silently re-login with saved email
+              const reUser = await apiLogin(savedEmail);
+              if(reUser && !reUser.error && reUser.email){
+                await lc.set("beta-profile", reUser);
+                setBetaProfile(reUser);
+                setUserName(reUser.name?.split(" ")[0]||"Friend");
+                setAppMode("beta");
+                setBetaStep("dashboard");
+              }
+            }
+          }).catch(async () => {
+            if(savedEmail) {
+              const reUser = await apiLogin(savedEmail).catch(()=>null);
+              if(reUser && !reUser.error && reUser.email){
+                await lc.set("beta-profile", reUser);
+                setBetaProfile(reUser);
+                setUserName(reUser.name?.split(" ")[0]||"Friend");
+              }
+            }
+          });
+        } else if(savedEmail) {
+          // Token missing but user email remembered — seamlessly log in
+          apiLogin(savedEmail).then(async fresh => {
+            if(fresh && !fresh.error && fresh.email){
+              await lc.set("beta-profile", fresh);
+              setBetaProfile(fresh);
+              setUserName(fresh.name?.split(" ")[0]||"Friend");
               setAppMode("beta");
               setBetaStep("dashboard");
             }
@@ -6598,7 +6695,7 @@ export default function Paymint(){
                 <motion.div key="bp" variants={V} initial="initial" animate="animate" exit="exit"
                   transition={SP.gentle} style={{position:"absolute",inset:0}}>
                   <BetaProfileSetup
-                    onDone={(p, isNew)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep(isNew ? "how" : "dashboard");}}
+                    onDone={(p, isNew)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setAppMode("beta");setBetaStep(isNew ? "how" : "dashboard");}}
                     onBetaTap={triggerFounder5Tap}
                   />
                 </motion.div>
@@ -6617,6 +6714,7 @@ export default function Paymint(){
                     onExplorePrototype={()=>{setAppMode("prototype");go(1);}}
                     onUpdateProfile={(p)=>setBetaProfile(p)}
                     onBetaTap={triggerFounder5Tap}
+                    onLogout={handleLogout}
                   />
                 </motion.div>
               )}
