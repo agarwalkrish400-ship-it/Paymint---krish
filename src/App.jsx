@@ -6198,70 +6198,72 @@ function IOSInstallModal({ onClose }) {
 // NOTIFICATION PERMISSION MODAL — (Recommended by Krish)
 // ══════════════════════════════════════════════════════════════════════════════
 function NotificationPermissionModal({ onClose }) {
-  const handleAllow = async () => {
+  const handleAllow = async (e) => {
+    if (e) {
+      if (e.preventDefault) e.preventDefault();
+      if (e.stopPropagation) e.stopPropagation();
+    }
     try {
       if (typeof window !== "undefined" && "Notification" in window) {
-        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-          await Notification.requestPermission();
-        }
+        Notification.requestPermission().catch(() => {});
       }
-    } catch(e) {
-      console.warn("Notification request error:", e);
-    }
+    } catch (err) {}
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.setItem("paymint_notif_allowed", "true");
         localStorage.setItem("paymint_notif_prompted", "true");
       }
-    } catch(e) {}
+    } catch (err) {}
     onClose();
   };
 
-  const handleDismiss = () => {
+  const handleDismiss = (e) => {
+    if (e) {
+      if (e.preventDefault) e.preventDefault();
+      if (e.stopPropagation) e.stopPropagation();
+    }
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.setItem("paymint_notif_prompted", "true");
       }
-    } catch(e) {}
+    } catch (err) {}
     onClose();
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+    <div
+      onClick={handleDismiss}
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 9999,
-        background: "rgba(0,0,0,0.86)",
-        backdropFilter: "blur(22px)",
-        WebkitBackdropFilter: "blur(22px)",
+        zIndex: 999999,
+        background: "rgba(0,0,0,0.88)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: "20px",
         boxSizing: "border-box",
+        touchAction: "manipulation",
+        pointerEvents: "auto",
       }}
     >
-      <motion.div
-        initial={{ scale: 0.9, y: 22, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        exit={{ scale: 0.92, y: 12, opacity: 0 }}
-        transition={SP.bouncy}
+      <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%",
           maxWidth: 340,
           boxSizing: "border-box",
           borderRadius: 24,
-          background: "linear-gradient(145deg, #111116, #0A0A0E)",
-          border: "1px solid rgba(255,255,255,0.14)",
+          background: "linear-gradient(145deg, #121217, #0A0A0E)",
+          border: "1px solid rgba(255,255,255,0.15)",
           padding: "26px 20px 22px",
           textAlign: "center",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.9), 0 0 40px rgba(74,158,255,0.12)",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.95), 0 0 40px rgba(74,158,255,0.15)",
           position: "relative",
           overflow: "hidden",
+          pointerEvents: "auto",
         }}
       >
         {/* Glow ambient background */}
@@ -6293,29 +6295,25 @@ function NotificationPermissionModal({ onClose }) {
             justifyContent: "center",
             margin: "0 auto 14px",
             boxShadow: "0 8px 24px rgba(74,158,255,0.2)",
+            pointerEvents: "none",
           }}
         >
-          <motion.div
-            animate={{ rotate: [0, -12, 12, -8, 8, 0] }}
-            transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 1.5, ease: "easeInOut" }}
-          >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"
-                stroke={T.blue}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M13.73 21a2 2 0 01-3.46 0"
-                stroke={T.gold}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.div>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"
+              stroke={T.blue}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M13.73 21a2 2 0 01-3.46 0"
+              stroke={T.gold}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
 
         {/* Title */}
@@ -6347,10 +6345,11 @@ function NotificationPermissionModal({ onClose }) {
         </p>
 
         {/* Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", boxSizing: "border-box" }}>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
+        <div style={{ display: "flex", flexDirection: "column", gap: 9, width: "100%", boxSizing: "border-box" }}>
+          <button
+            type="button"
             onClick={handleAllow}
+            onTouchEnd={handleAllow}
             style={{
               width: "100%",
               boxSizing: "border-box",
@@ -6368,33 +6367,40 @@ function NotificationPermissionModal({ onClose }) {
               alignItems: "center",
               justifyContent: "center",
               gap: 6,
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
+              userSelect: "none",
             }}
           >
-            <span>Allow Notifications</span>
-          </motion.button>
+            Allow Notifications
+          </button>
 
-          <motion.button
-            whileTap={{ scale: 0.96 }}
+          <button
+            type="button"
             onClick={handleDismiss}
+            onTouchEnd={handleDismiss}
             style={{
               width: "100%",
               boxSizing: "border-box",
-              padding: "10px 0",
+              padding: "11px 0",
               borderRadius: 14,
-              background: "transparent",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: T.textMute,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: T.textSub,
               fontSize: 13,
               fontWeight: 600,
               fontFamily: "inherit",
               cursor: "pointer",
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
+              userSelect: "none",
             }}
           >
             Maybe Later
-          </motion.button>
+          </button>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
