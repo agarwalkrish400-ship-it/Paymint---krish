@@ -4949,15 +4949,16 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
             style={{position:"absolute",inset:0,zIndex:300,background:"rgba(0,0,0,0.88)",
               backdropFilter:"blur(20px)",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 28px"}}>
             <motion.div initial={{scale:0.9,y:20}} animate={{scale:1,y:0}} transition={SP.bouncy}
-              style={{width:"100%",borderRadius:22,background:"#0A0A0C",
-                border:"1px solid rgba(255,255,255,0.1)",padding:"28px 22px"}}>
-              <p style={{margin:"0 0 4px",fontSize:11,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ACCESS</p>
-              <h3 style={{margin:"0 0 18px",fontSize:20,fontWeight:800,color:T.text}}>Enter Password</h3>
+              style={{width:"100%",maxWidth:340,borderRadius:22,background:"#0A0A0C",
+                border:"1px solid rgba(255,255,255,0.1)",padding:"26px 20px"}}>
+              <h3 style={{margin:"0 0 16px",fontSize:19,fontWeight:800,color:T.text,textAlign:"center"}}>Enter Password</h3>
               <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setPwErr("");}}
                 onKeyDown={e=>e.key==="Enter"&&handlePwSubmit()}
-                placeholder="Founder password"
+                placeholder="••••••••"
+                autoFocus
                 style={{width:"100%",padding:"13px 15px",borderRadius:12,border:`1px solid ${T.glassBorder}`,
-                  background:T.glass,color:T.text,fontSize:15,fontFamily:"inherit",
+                  background:T.glass,color:T.text,fontSize:16,fontFamily:"inherit",
+                  textAlign:"center",letterSpacing:"0.15em",
                   outline:"none",caretColor:T.blue,boxSizing:"border-box",marginBottom:8}}/>
               {pwErr&&<p style={{margin:"0 0 10px",fontSize:12,color:T.error}}>{pwErr}</p>}
               <div style={{display:"flex",gap:10,marginTop:10}}>
