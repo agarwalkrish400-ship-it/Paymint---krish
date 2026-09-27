@@ -2180,7 +2180,8 @@ function DashboardScreen({userName}){
 
       {/* TOP BAR */}
       <motion.div initial={{opacity:0,y:-14}} animate={{opacity:1,y:0}} transition={{duration:0.5}}
-        style={{position:"absolute",top:0,left:0,right:0,zIndex:30,padding:"48px 22px 14px",
+        style={{position:"absolute",top:0,left:0,right:0,zIndex:30,
+          padding:"calc(env(safe-area-inset-top, 0px) + 16px) 22px 14px",
           background:"linear-gradient(to bottom,rgba(0,0,0,0.95),rgba(0,0,0,0.7),transparent)",
           display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <motion.button whileTap={{scale:0.9}}
@@ -2211,7 +2212,9 @@ function DashboardScreen({userName}){
       </motion.div>
 
       {/* CONTENT */}
-      <div style={{position:"absolute",inset:0,overflowY:"auto",paddingTop:106,paddingBottom:90}}>
+      <div style={{position:"absolute",inset:0,overflowY:"auto",
+        paddingTop:"calc(env(safe-area-inset-top, 0px) + 72px)",
+        paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 84px)"}}>
         <ParticleField count={8}/>
         <Glow x={80} y={5} color="rgba(74,158,255,0.07)" size={320}/>
 
@@ -2292,13 +2295,14 @@ function DashboardScreen({userName}){
                   <p style={{margin:"0 0 11px",fontSize:13,fontWeight:700,color:T.textSub,letterSpacing:"0.01em"}}>Your Journey</p>
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {[
+                      {title:"Rewards & Vouchers", sub:"5% return vouchers or 1.5% UPI cashback", col:"#E8C46A", nav:"store_tab"},
                       {title:"Earn Coins",     sub:"Earn coins on every spend",              col:T.blue,   nav:null       },
                       {title:"Weekly Rewards", sub:"Unlock rewards through weekly activity", col:"#8A5CF6", nav:"weekly"  },
                       {title:"Monthly Tiers",  sub:"Unlock larger monthly rewards",          col:T.gold,   nav:"monthly" },
                     ].map((j,i)=>(
                       <motion.div key={j.title} initial={{opacity:0,x:-14}} animate={{opacity:1,x:0}}
                         transition={{delay:i*0.07,duration:0.38}}
-                        onClick={j.nav?()=>setSubScreen(j.nav):undefined}
+                        onClick={j.nav==="store_tab"?()=>setTab("store"):j.nav?()=>setSubScreen(j.nav):undefined}
                         whileTap={j.nav?{scale:0.97}:{}}
                         style={{display:"flex",alignItems:"center",gap:13,padding:"13px 15px",
                           borderRadius:14,background:T.glass,border:`1px solid ${T.glassBorder}`,
@@ -2578,9 +2582,10 @@ function DashboardScreen({userName}){
       {/* BOTTOM NAV */}
       <motion.div initial={{opacity:0,y:36}} animate={{opacity:1,y:0}} transition={{delay:0.9,duration:0.5}}
         style={{position:"absolute",bottom:0,left:0,right:0,zIndex:40,
-          background:"rgba(0,0,0,0.9)",backdropFilter:"blur(22px)",
+          background:"rgba(0,0,0,0.92)",backdropFilter:"blur(22px)",
           borderTop:"1px solid rgba(255,255,255,0.07)",
-          display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 24px 22px"}}>
+          display:"flex",alignItems:"center",justifyContent:"space-around",
+          padding:"10px 24px calc(env(safe-area-inset-bottom, 0px) + 16px)"}}>
         <motion.button whileTap={{scale:0.88}} onClick={()=>setTab("home")}
           style={{background:"none",border:"none",cursor:"pointer",
             display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 12px",
@@ -5175,7 +5180,8 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
       </AnimatePresence>
 
       {/* TOP BAR */}
-      <div style={{position:"absolute",top:0,left:0,right:0,zIndex:30,padding:"48px 20px 14px",
+      <div style={{position:"absolute",top:0,left:0,right:0,zIndex:30,
+        padding:"calc(env(safe-area-inset-top, 0px) + 16px) 20px 14px",
         background:"linear-gradient(to bottom,rgba(0,0,0,0.96),rgba(0,0,0,0.7),transparent)",
         display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <motion.button whileTap={{scale:0.88}} onClick={()=>setMenuOpen(true)}
@@ -5209,7 +5215,9 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
       </div>
 
       {/* CONTENT */}
-      <div style={{position:"absolute",inset:0,overflowY:"auto",paddingTop:106,paddingBottom:90}}>
+      <div style={{position:"absolute",inset:0,overflowY:"auto",
+        paddingTop:"calc(env(safe-area-inset-top, 0px) + 72px)",
+        paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 84px)"}}>
         <AnimatePresence mode="wait">
 
           {/* HOME */}
@@ -5238,6 +5246,36 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                   <span style={{fontSize:52,fontWeight:800,letterSpacing:"-0.05em",color:"inherit"}}>{coins.toFixed(1)}</span>
                 </motion.div>
                 <p style={{margin:"2px 0 0",fontSize:13,color:T.textMute}}>Paymint Coins</p>
+              </motion.div>
+
+              {/* BRAND REWARDS & CASHBACK BANNER */}
+              <motion.div
+                initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} transition={{delay:0.15,...SP.gentle}}
+                whileTap={{scale:0.98}}
+                onClick={()=>setTab("store")}
+                style={{borderRadius:20,padding:"15px 16px",marginBottom:14,cursor:"pointer",
+                  background:"linear-gradient(135deg,rgba(232,196,106,0.12),rgba(74,158,255,0.08))",
+                  border:"1px solid rgba(232,196,106,0.26)",
+                  boxShadow:"0 8px 28px rgba(232,196,106,0.07)"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7}}>
+                    <span style={{fontSize:16}}>🎁</span>
+                    <span style={{fontSize:12.5,fontWeight:800,color:T.gold,letterSpacing:"0.03em"}}>REWARDS & VOUCHERS</span>
+                  </div>
+                  <span style={{fontSize:11,fontWeight:700,color:T.blue,background:"rgba(74,158,255,0.14)",border:"1px solid rgba(74,158,255,0.28)",padding:"2px 8px",borderRadius:12}}>
+                    Explore 21+ Brands →
+                  </span>
+                </div>
+                <p style={{margin:"0 0 10px",fontSize:12,color:T.textSub,lineHeight:1.45}}>
+                  Redeem coins for <strong style={{color:"#E8C46A"}}>5% returns</strong> on Amazon, Swiggy, Netflix & Spotify or <strong style={{color:"#4A9EFF"}}>1.5% direct UPI cashback</strong>.
+                </p>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                  {["Amazon", "Swiggy", "Zomato", "Netflix", "Spotify", "Blinkit", "Cashback"].map(b=>(
+                    <span key={b} style={{fontSize:10.5,fontWeight:600,color:T.text,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",padding:"2px 7px",borderRadius:8}}>
+                      {b}
+                    </span>
+                  ))}
+                </div>
               </motion.div>
 
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
@@ -5562,7 +5600,8 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
       <div style={{position:"absolute",bottom:0,left:0,right:0,zIndex:40,
         background:"rgba(0,0,0,0.92)",backdropFilter:"blur(22px)",
         borderTop:"1px solid rgba(255,255,255,0.07)",
-        display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 28px 22px"}}>
+        display:"flex",alignItems:"center",justifyContent:"space-around",
+        padding:"10px 28px calc(env(safe-area-inset-bottom, 0px) + 16px)"}}>
         <motion.button whileTap={{scale:0.88}} onClick={()=>setTab("home")}
           style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",
             alignItems:"center",gap:3,padding:"4px 12px",color:tab==="home"?T.blue:T.textMute,fontFamily:"inherit"}}>

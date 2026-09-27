@@ -1023,7 +1023,7 @@ export function RewardStoreView({
               border: `1px solid ${T.glassBorder}`,
               background: T.glass,
               color: T.text,
-              fontSize: 13,
+              fontSize: 16,
               fontFamily: "inherit",
               outline: "none",
               caretColor: T.blue,
@@ -2028,7 +2028,7 @@ export function FounderRewardsTab({
                       border: `1px solid ${T.glassBorder}`,
                       background: T.glass,
                       color: T.text,
-                      fontSize: 13,
+                      fontSize: 16,
                       fontFamily: "inherit",
                       boxSizing: "border-box",
                     }}
@@ -2082,7 +2082,7 @@ export function FounderRewardsTab({
                     border: `1px solid ${T.glassBorder}`,
                     background: T.glass,
                     color: T.text,
-                    fontSize: 13,
+                    fontSize: 16,
                     fontFamily: "inherit",
                     boxSizing: "border-box",
                   }}
@@ -2104,7 +2104,7 @@ export function FounderRewardsTab({
                       border: `1px solid ${T.glassBorder}`,
                       background: T.glass,
                       color: T.text,
-                      fontSize: 13,
+                      fontSize: 16,
                       fontFamily: "inherit",
                       boxSizing: "border-box",
                     }}
@@ -2124,7 +2124,7 @@ export function FounderRewardsTab({
                       background: T.glass,
                       color: T.gold,
                       fontWeight: 700,
-                      fontSize: 13,
+                      fontSize: 16,
                       fontFamily: "inherit",
                       boxSizing: "border-box",
                     }}
@@ -2200,7 +2200,7 @@ export function FounderRewardsTab({
                     border: `1px solid ${T.glassBorder}`,
                     background: T.glass,
                     color: T.text,
-                    fontSize: 11.5,
+                    fontSize: 16,
                     fontFamily: "monospace",
                     resize: "vertical",
                     boxSizing: "border-box",

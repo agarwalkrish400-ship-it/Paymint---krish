@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const founder = isFounder(req);
     const user = authUser(req);
-    if (!founder && !user) return res.status(401).json({ error: 'Unauthorised' });
+    // Catalog is public for browsing simulation rewards; founder gets extended stock view
     try {
       const DEFAULT_CATALOG = [
         { brand: 'Netflix', label: '1-Month Mobile Subscription', cost_coins: 1490, codes: ['NFLX-SIM-M101', 'NFLX-SIM-M102', 'NFLX-SIM-M103', 'NFLX-SIM-M104'] },
