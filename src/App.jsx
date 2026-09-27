@@ -2644,18 +2644,84 @@ function StepBar({current}){
 
 const API = ''; // same-domain — /api/... routes handled by Vercel
 
+// ── Cookie Fallback Helpers for Mobile (Android Chrome / iOS Safari) ─────────
+function setCookie(name, value, days = 365) {
+  try {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  } catch(e){}
+}
+function getCookie(name) {
+  try {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
+  } catch(e) { return null; }
+}
+function delCookie(name) {
+  try {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  } catch(e){}
+}
+
 // ── Token storage ─────────────────────────────────────────────────────────────
 const tokenStore = {
-  get: () => { try { return localStorage.getItem('pm_token'); } catch { return null; } },
-  set: (t) => { try { localStorage.setItem('pm_token', t); } catch {} },
-  del: () => { try { localStorage.removeItem('pm_token'); } catch {} },
+  get: () => {
+    try {
+      return localStorage.getItem('pm_token') || getCookie('pm_token') || null;
+    } catch {
+      return getCookie('pm_token') || null;
+    }
+  },
+  set: (t) => {
+    try {
+      localStorage.setItem('pm_token', t);
+      setCookie('pm_token', t, 365);
+    } catch {
+      setCookie('pm_token', t, 365);
+    }
+  },
+  del: () => {
+    try {
+      localStorage.removeItem('pm_token');
+      delCookie('pm_token');
+    } catch {
+      delCookie('pm_token');
+    }
+  },
 };
 
-// ── localStorage cache helper (UI speed — not source of truth) ────────────────
+// ── localStorage & cookie cache helper (UI speed & persistence) ───────────────
 const lc = {
-  get: async (k) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch { return null; } },
-  set: async (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
-  del: async (k) => { try { localStorage.removeItem(k); } catch {} },
+  get: async (k) => {
+    try {
+      const v = localStorage.getItem(k);
+      if (v) return JSON.parse(v);
+      const ck = getCookie(k);
+      return ck ? JSON.parse(ck) : null;
+    } catch {
+      try {
+        const ck = getCookie(k);
+        return ck ? JSON.parse(ck) : null;
+      } catch { return null; }
+    }
+  },
+  set: async (k, v) => {
+    try {
+      const str = JSON.stringify(v);
+      localStorage.setItem(k, str);
+      setCookie(k, str, 365);
+    } catch {
+      try { setCookie(k, JSON.stringify(v), 365); } catch {}
+    }
+  },
+  del: async (k) => {
+    try {
+      localStorage.removeItem(k);
+      delCookie(k);
+    } catch {
+      delCookie(k);
+    }
+  },
 };
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
@@ -2688,6 +2754,16 @@ async function apiRegister(form) {
   const r = await apiFetch('/api/users/register', {
     method: 'POST',
     body: { email: form.email, name: form.name, age: form.age, occupation: form.occupation },
+  });
+  if (isErr(r)) return { error: true, message: r.message };
+  tokenStore.set(r.token);
+  return r.user;
+}
+
+async function apiLogin(email) {
+  const r = await apiFetch('/api/users/login', {
+    method: 'POST',
+    body: { email: (email || '').toLowerCase().trim() },
   });
   if (isErr(r)) return { error: true, message: r.message };
   tokenStore.set(r.token);
@@ -2938,77 +3014,153 @@ function ExperienceSelect({onBeta,onPrototype,onBetaTap}){
 // BETA PROFILE SETUP
 // ══════════════════════════════════════════════════════════════════════════════
 function BetaProfileSetup({onDone, onBetaTap}){
-  const [form,setForm]=useState({name:"",age:"",occupation:"",email:""});
-  const [errors,setErrors]=useState({});
-  const [saving,setSaving]=useState(false);
-  const [sbErr,setSbErr]=useState("");
-  const validate=(f,v)=>{
+  const [tab, setTab] = useState("join"); // "join" | "login"
+  const [form, setForm] = useState({name:"", age:"", occupation:"", email:""});
+  const [loginEmail, setLoginEmail] = useState("");
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [sbErr, setSbErr] = useState("");
+
+  const validate = (f, v) => {
     if(f==="name")       return v.trim().length<2?"Enter your name":null;
     if(f==="age")        return (isNaN(v)||Number(v)<10||Number(v)>100)?"Enter a valid age":null;
     if(f==="occupation") return v.trim().length<2?"Enter your occupation":null;
     if(f==="email")      return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)?"Enter a valid email":null;
     return null;
   };
-  const chg=f=>e=>{setForm(x=>({...x,[f]:e.target.value}));setErrors(x=>({...x,[f]:null}));setSbErr("");};
-  const submit=async()=>{
-    const errs={};let bad=false;
-    Object.keys(form).forEach(k=>{const e=validate(k,form[k]);if(e){errs[k]=e;bad=true;}});
-    setErrors(errs);if(bad)return;
-    setSaving(true);setSbErr("");
 
-    console.log("[BETA] Registering:", form.email);
+  const chg = f => e => {
+    setForm(x=>({...x, [f]:e.target.value}));
+    setErrors(x=>({...x, [f]:null}));
+    setSbErr("");
+  };
+
+  const submitRegister = async () => {
+    const errs = {}; let bad = false;
+    Object.keys(form).forEach(k => { const e = validate(k, form[k]); if(e){ errs[k] = e; bad = true; } });
+    setErrors(errs); if(bad) return;
+    setSaving(true); setSbErr("");
+
     const user = await apiRegister(form);
-    console.log("[BETA] Register result:", user);
     if(!user || user.error){
-      const errMsg = user?.message||"Could not connect to server";
+      const errMsg = user?.message || "Could not connect to server";
       if(errMsg.includes('DATABASE_URL')) {
         setSbErr("Server not configured yet. Ask your tech team to complete Vercel setup.");
       } else {
-        setSbErr("Registration failed: "+errMsg+"\n\nCheck your internet connection and try again.");
+        setSbErr("Registration failed: " + errMsg + "\n\nCheck your internet connection and try again.");
       }
       setSaving(false); return;
     }
     await lc.set("beta-profile", user);
     setSaving(false);
-    onDone(user);
-  };;
+    onDone(user, true);
+  };
+
+  const submitLogin = async () => {
+    const clean = loginEmail.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)){
+      setErrors({ email: "Enter a valid email address" });
+      return;
+    }
+    setSaving(true); setSbErr("");
+    const user = await apiLogin(clean);
+    if(!user || user.error){
+      const errMsg = user?.message || "Could not sign in";
+      if(errMsg.toLowerCase().includes("no account found") || errMsg.includes("404")){
+        setSbErr("No account found for this email. Switch to 'Create Account' to join the beta!");
+      } else {
+        setSbErr("Sign in failed: " + errMsg);
+      }
+      setSaving(false);
+      return;
+    }
+    await lc.set("beta-profile", user);
+    setSaving(false);
+    onDone(user, false);
+  };
+
   return(
     <div style={{position:"relative",width:"100%",height:"100%",background:T.black,
       display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <ParticleField count={10}/>
       <Glow x={70} y={8} color="rgba(74,158,255,0.07)" size={360}/>
+
       <motion.div initial={{opacity:0,y:-16}} animate={{opacity:1,y:0}} transition={{duration:0.45}}
-        style={{padding:"52px 24px 0",flexShrink:0}}>
+        style={{padding:"48px 24px 0",flexShrink:0}}>
         <div onClick={onBetaTap} style={{cursor:"default",userSelect:"none",display:"inline-block"}}>
           <LogoBadge size={30}/>
         </div>
-        <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:0.2}} style={{marginTop:20}}>
-          <p style={{margin:"0 0 5px",fontSize:12,color:T.blue,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>Welcome</p>
-          <h2 style={{margin:"0 0 6px",fontSize:26,fontWeight:800,color:T.text,letterSpacing:"-0.03em",lineHeight:1.2}}>
-            Join the Paymint<br/>Beta Program
+        <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:0.15}} style={{marginTop:16}}>
+          <p style={{margin:"0 0 4px",fontSize:12,color:T.blue,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+            {tab==="join"?"Beta Access":"Welcome Back"}
+          </p>
+          <h2 style={{margin:"0 0 6px",fontSize:24,fontWeight:800,color:T.text,letterSpacing:"-0.03em",lineHeight:1.2}}>
+            {tab==="join"?"Join Paymint Beta":"Sign In to Paymint"}
           </h2>
-          <p style={{margin:0,fontSize:13,color:T.textSub,lineHeight:1.6}}>Tell us about yourself — we ask only once, ever.</p>
+          <p style={{margin:0,fontSize:13,color:T.textSub,lineHeight:1.5}}>
+            {tab==="join"?"Create your account to start earning coins on UPI payments.":"Enter your registered email to continue where you left off."}
+          </p>
         </motion.div>
+
+        {/* Tab switch */}
+        <div style={{display:"flex",gap:6,background:"rgba(255,255,255,0.05)",padding:4,borderRadius:12,marginTop:16,border:"1px solid rgba(255,255,255,0.08)"}}>
+          <button onClick={()=>{setTab("join");setSbErr("");setErrors({});}}
+            style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",
+              background:tab==="join"?"rgba(74,158,255,0.2)":"transparent",
+              color:tab==="join"?T.blue:T.textSub,
+              transition:"all 0.2s ease"}}>
+            Create Account
+          </button>
+          <button onClick={()=>{setTab("login");setSbErr("");setErrors({});}}
+            style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",
+              background:tab==="login"?"rgba(74,158,255,0.2)":"transparent",
+              color:tab==="login"?T.blue:T.textSub,
+              transition:"all 0.2s ease"}}>
+            Sign In
+          </button>
+        </div>
       </motion.div>
-      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:0.28,...SP.gentle}}
-        style={{flex:1,overflowY:"auto",padding:"22px 24px 0"}}>
-        <FloatingInput label="Full Name"     value={form.name}       onChange={chg("name")}       error={errors.name}/>
-        <FloatingInput label="Age"           type="number" value={form.age}  onChange={chg("age")}  error={errors.age}/>
-        <FloatingInput label="Occupation"    value={form.occupation}  onChange={chg("occupation")}  error={errors.occupation}/>
-        <FloatingInput label="Email Address" type="email"  value={form.email} onChange={chg("email")} error={errors.email}/>
+
+      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:0.2,...SP.gentle}}
+        style={{flex:1,overflowY:"auto",padding:"16px 24px 0"}}>
+        {tab==="join" ? (
+          <div>
+            <FloatingInput label="Full Name"     value={form.name}       onChange={chg("name")}       error={errors.name}/>
+            <FloatingInput label="Age"           type="number" value={form.age}  onChange={chg("age")}  error={errors.age}/>
+            <FloatingInput label="Occupation"    value={form.occupation}  onChange={chg("occupation")}  error={errors.occupation}/>
+            <FloatingInput label="Email Address" type="email"  value={form.email} onChange={chg("email")} error={errors.email}/>
+          </div>
+        ) : (
+          <div style={{paddingTop:8}}>
+            <FloatingInput label="Your Email Address" type="email" value={loginEmail}
+              onChange={e=>{setLoginEmail(e.target.value);setErrors({});setSbErr("");}}
+              error={errors.email}/>
+            <p style={{margin:"8px 0 0",fontSize:12,color:T.textSub,lineHeight:1.5}}>
+              Instant login — no password required. Your transactions and coins are linked to your email.
+            </p>
+          </div>
+        )}
+
         {sbErr&&(
           <motion.div initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}}
             style={{padding:"12px 14px",borderRadius:12,background:"rgba(255,96,88,0.08)",
-              border:"1px solid rgba(255,96,88,0.25)",marginBottom:8}}>
+              border:"1px solid rgba(255,96,88,0.25)",marginTop:12,marginBottom:8}}>
             <p style={{margin:0,fontSize:12.5,color:T.error,lineHeight:1.55}}>{sbErr}</p>
           </motion.div>
         )}
       </motion.div>
-      <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.45}}
-        style={{padding:"14px 24px 44px",flexShrink:0}}>
-        <Btn onClick={submit} disabled={saving} full large>
-          {saving?"Saving profile…":"Join Beta"}
-        </Btn>
+
+      <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.35}}
+        style={{padding:"14px 24px 38px",flexShrink:0}}>
+        {tab==="join" ? (
+          <Btn onClick={submitRegister} disabled={saving} full large>
+            {saving?"Creating account…":"Join Beta"}
+          </Btn>
+        ) : (
+          <Btn onClick={submitLogin} disabled={saving} full large>
+            {saving?"Signing in…":"Sign In"}
+          </Btn>
+        )}
       </motion.div>
     </div>
   );
@@ -6247,17 +6399,22 @@ function NotificationPermissionModal({ onClose }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ROOT — God Mode
-// ══════════════════════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════════════════════
 // ROOT — God Mode & Universal 5-Tap Founder Access
 // ══════════════════════════════════════════════════════════════════════════════
+const getStoredProfile = () => {
+  try {
+    const raw = localStorage.getItem('beta-profile') || getCookie('beta-profile') || getCookie('pm_profile');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+};
+
 export default function Paymint(){
-  const [appMode,setAppMode]=useState("loading"); // loading|select_pending|select|beta|prototype
-  const [betaStep,setBetaStep]=useState("profile");
-  const [betaProfile,setBetaProfile]=useState(null);
+  const initialProfile = getStoredProfile();
+  const [appMode,setAppMode]=useState(() => (initialProfile?.email ? "beta" : "select_pending"));
+  const [betaStep,setBetaStep]=useState(() => (initialProfile?.email ? "dashboard" : "profile"));
+  const [betaProfile,setBetaProfile]=useState(() => initialProfile);
   const [screen,setScreen]=useState(0);
-  const [userName,setUserName]=useState("Friend");
+  const [userName,setUserName]=useState(() => (initialProfile?.name?.split(" ")[0] || "Friend"));
   const [showNotifPrompt,setShowNotifPrompt]=useState(false);
 
   // Global 5-tap founder state
@@ -6297,42 +6454,36 @@ export default function Paymint(){
   const go=n=>setScreen(n);
 
   useEffect(()=>{
-    let resolved = false;
-    const safetyTimer = setTimeout(()=>{
-      if(!resolved) {
-        setAppMode(prev => prev === "loading" ? "select_pending" : prev);
-      }
-    }, 800);
-
     (async()=>{
       try {
         let profile = await lc.get("beta-profile");
         const token = tokenStore.get();
-        resolved = true;
-        clearTimeout(safetyTimer);
         console.log("[ROOT] profile:", profile?.email||"none", "token:", token?"YES":"NO");
 
-        if(profile?.email && token){
+        if(profile?.email){
           setBetaProfile(profile);
           setUserName(profile.name?.split(" ")[0]||"Friend");
           setAppMode("beta");
           setBetaStep("dashboard");
-          // Background refresh from API
+        }
+
+        // Background refresh from API
+        if(token){
           apiGetMe().then(fresh=>{
-            if(fresh && !fresh.error){
-              const merged={...profile,...fresh};
+            if(fresh && !fresh.error && fresh.email){
+              const merged={...(profile||{}), ...fresh};
               lc.set("beta-profile", merged);
               setBetaProfile(merged);
+              setUserName(merged.name?.split(" ")[0]||"Friend");
+              setAppMode("beta");
+              setBetaStep("dashboard");
             }
           }).catch(()=>{});
-        } else {
+        } else if(!profile?.email) {
           setAppMode("select_pending");
         }
       } catch(err) {
-        resolved = true;
-        clearTimeout(safetyTimer);
-        console.error("[Root] Startup:", err.message);
-        setAppMode("select_pending");
+        console.error("[Root] Startup sync:", err.message);
       }
 
       // Check notification permission prompt
@@ -6345,18 +6496,17 @@ export default function Paymint(){
         } catch(e){}
       }, 900);
     })();
-
-    return () => clearTimeout(safetyTimer);
   },[]);
 
   return(
     <div style={{width:"100vw",height:"100dvh",minHeight:"-webkit-fill-available",background:T.black,
       fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
       overflow:"hidden",position:"relative",maxWidth:430,margin:"0 auto",
+      touchAction:"manipulation",
       paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0;}
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
         html,body{
           background:#000;
           height:100%;
@@ -6367,6 +6517,7 @@ export default function Paymint(){
           -webkit-font-smoothing:antialiased;
           -moz-osx-font-smoothing:grayscale;
           overscroll-behavior:none;
+          touch-action:manipulation;
         }
         #root{
           min-height:100vh;
@@ -6376,12 +6527,13 @@ export default function Paymint(){
         input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.28);}
         input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;}
         ::-webkit-scrollbar{display:none;}
-        *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+        *{-webkit-touch-callout:none;}
         input,textarea,select{
           -webkit-appearance:none;
           -moz-appearance:none;
           appearance:none;
           font-size:16px !important;
+          touch-action:manipulation;
         }
         div,main,section{
           -webkit-overflow-scrolling:touch;
@@ -6434,7 +6586,7 @@ export default function Paymint(){
                 <motion.div key="bp" variants={V} initial="initial" animate="animate" exit="exit"
                   transition={SP.gentle} style={{position:"absolute",inset:0}}>
                   <BetaProfileSetup
-                    onDone={(p)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep("how");}}
+                    onDone={(p, isNew)=>{setBetaProfile(p);setUserName(p.name?.split(" ")[0]||"Friend");setBetaStep(isNew ? "how" : "dashboard");}}
                     onBetaTap={triggerFounder5Tap}
                   />
                 </motion.div>
