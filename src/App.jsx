@@ -4961,17 +4961,17 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile}){
                   textAlign:"center",letterSpacing:"0.15em",
                   outline:"none",caretColor:T.blue,boxSizing:"border-box",marginBottom:8}}/>
               {pwErr&&<p style={{margin:"0 0 10px",fontSize:12,color:T.error}}>{pwErr}</p>}
-              <div style={{display:"flex",gap:10,marginTop:10}}>
+              <div style={{display:"flex",gap:10,marginTop:12,width:"100%",boxSizing:"border-box"}}>
                 <motion.button whileTap={{scale:0.96}}
                   onClick={()=>{setShowPwModal(false);setPw("");setPwErr("");}}
-                  style={{flex:1,padding:"13px",borderRadius:12,background:T.glass,
+                  style={{flex:1,minWidth:0,boxSizing:"border-box",padding:"13px",borderRadius:12,background:T.glass,
                     border:`1px solid ${T.glassBorder}`,color:T.textSub,fontSize:14,
                     fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
                   Cancel
                 </motion.button>
                 <motion.button whileTap={{scale:0.96}}
                   onClick={handlePwSubmit}
-                  style={{flex:1,padding:"13px",borderRadius:12,border:"none",
+                  style={{flex:1,minWidth:0,boxSizing:"border-box",padding:"13px",borderRadius:12,border:"none",
                     background:`linear-gradient(135deg,${T.blue},${T.blueDeep})`,
                     color:"white",fontSize:14,fontWeight:700,fontFamily:"inherit",
                     cursor:"pointer",boxShadow:"0 4px 14px rgba(74,158,255,0.35)"}}>
