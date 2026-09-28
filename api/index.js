@@ -8,6 +8,7 @@ import adminRedemptions from './_routes/admin_redemptions.js';
 import adminTelemetry from './_routes/admin_telemetry.js';
 import adminTransactions from './_routes/admin_transactions.js';
 import adminUsers from './_routes/admin_users.js';
+import adminExport from './_routes/admin_export.js';
 
 import rewardsIndex from './_routes/rewards_index.js';
 import rewardsClaim from './_routes/rewards_claim.js';
@@ -101,6 +102,7 @@ export default async function handler(req, res) {
     if (p.endsWith('/admin/telemetry')) return await adminTelemetry(req, res);
     if (p.endsWith('/admin/transactions')) return await adminTransactions(req, res);
     if (p.endsWith('/admin/users')) return await adminUsers(req, res);
+    if (p.endsWith('/admin/export')) return await adminExport(req, res);
 
     if (p.endsWith('/rewards/claim')) return await rewardsClaim(req, res);
     if (p.endsWith('/rewards/manage')) return await rewardsManage(req, res);

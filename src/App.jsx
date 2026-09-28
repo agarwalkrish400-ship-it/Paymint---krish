@@ -4534,6 +4534,16 @@ function FounderDashboard({onClose, founderPw}){
   const [editReward,setEditReward]=useState(null);
   const [newReward,setNewReward]=useState({brand:"",label:"",cost_coins:"",codes:""});
   const [editRwForm,setEditRwForm]=useState({});
+  const [showExportModal,setShowExportModal]=useState(false);
+  const [syncingSheets,setSyncingSheets]=useState(false);
+  const [syncFeedback,setSyncFeedback]=useState(null);
+  const [webhookUrl,setWebhookUrl]=useState(()=>{
+    try { return localStorage.getItem("pm_founder_webhook") || ""; } catch { return ""; }
+  });
+  const [sheetUrl,setSheetUrl]=useState(()=>{
+    try { return localStorage.getItem("pm_founder_sheet_url") || "https://docs.google.com/spreadsheets/u/0/"; } catch { return "https://docs.google.com/spreadsheets/u/0/"; }
+  });
+  const [showScriptHelp,setShowScriptHelp]=useState(false);
 
   useEffect(()=>{
     (async()=>{
@@ -4655,6 +4665,218 @@ function FounderDashboard({onClose, founderPw}){
     if(d<86400)return`${Math.floor(d/3600)}h ago`;return`${Math.floor(d/86400)}d ago`;
   };
 
+  // ── MULTI-SHEET EXPORT HELPERS ──────────────────────────────────────────────
+  const computeUserAggregates = () => {
+    const spendByUser = {};
+    const merchantByUser = {};
+    for (const t of txns) {
+      const email = (t.user_email || '').toLowerCase();
+      const amt = Number(t.amount || 0);
+      spendByUser[email] = (spendByUser[email] || 0) + amt;
+      if (!merchantByUser[email]) merchantByUser[email] = {};
+      const m = (t.merchant || 'Unknown').trim();
+      merchantByUser[email][m] = (merchantByUser[email][m] || 0) + amt;
+    }
+    return { spendByUser, merchantByUser };
+  };
+
+  const downloadMultiSheetExcel = () => {
+    const { spendByUser, merchantByUser } = computeUserAggregates();
+    const escapeXml = s => (s === null || s === undefined ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;'));
+
+    const sheet1Headers = ["Name", "Age", "Occupation", "Mail ID", "Total Spend (₹)", "Top Spent Area", "Total Transactions", "Coins Balance", "Joined Date"];
+    const sheet1Rows = users.map(u => {
+      const email = (u.email || '').toLowerCase();
+      const totalSpend = spendByUser[email] || 0;
+      const mCounts = merchantByUser[email] || {};
+      let topMerchant = 'None';
+      let maxM = 0;
+      for (const [m, amt] of Object.entries(mCounts)) {
+        if (amt > maxM) { maxM = amt; topMerchant = m; }
+      }
+      return [
+        u.name || "Anonymous",
+        u.age || "N/A",
+        u.occupation || "N/A",
+        u.email || "",
+        totalSpend.toFixed(2),
+        topMerchant,
+        txns.filter(t => (t.user_email||'').toLowerCase() === email).length,
+        Number(u.coin_balance || 0).toFixed(1),
+        u.joined_at ? new Date(u.joined_at).toLocaleDateString('en-IN') : "N/A"
+      ];
+    });
+
+    const sheet2Headers = ["Date Uploaded", "Time", "Payer Name", "Payee Name", "Transaction ID", "Transaction Amount (₹)", "Coins Earned", "Extra Coins Earned", "Details Provided", "Platform Used", "Bank Name", "Screenshot Link"];
+    const sheet2Rows = txns.map(t => {
+      let ssText = "No Screenshot";
+      if (t.screenshot_url && t.screenshot_url.startsWith("http")) {
+        ssText = t.screenshot_url;
+      } else if (t.screenshot_url && t.screenshot_url.startsWith("data:image")) {
+        ssText = "Saved in Neon DB (Base64 JPEG)";
+      }
+      return [
+        t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN') : (t.txn_date || ""),
+        t.created_at ? new Date(t.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : (t.txn_time || ""),
+        t.user_name || (users.find(u=>u.id===t.user_id)?.name) || "Unknown",
+        t.merchant || "",
+        t.txn_id || "N/A",
+        Number(t.amount || 0).toFixed(2),
+        Number(t.base_coins || t.coins || 0).toFixed(1),
+        Number(t.bonus_coins || 0).toFixed(1),
+        t.purchase_note || "None",
+        t.payment_app || "UPI",
+        t.bank || "UPI Bank",
+        ssText
+      ];
+    });
+
+    const makeRow = cells => `<Row>` + cells.map(c => {
+      const isNum = typeof c === 'number' || (!isNaN(c) && c !== '' && !String(c).includes('-') && !String(c).includes(':') && !String(c).includes('/'));
+      return `<Cell><Data ss:Type="${isNum ? 'Number' : 'String'}">${escapeXml(c)}</Data></Cell>`;
+    }).join('') + `</Row>`;
+
+    const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+  </Style>
+  <Style ss:ID="Header1">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#1A5FC8" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center"/>
+  </Style>
+  <Style ss:ID="Header2">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#107C41" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Login Data">
+  <Table>
+   <Row ss:StyleID="Header1">
+    ${sheet1Headers.map(h => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`).join('')}
+   </Row>
+   ${sheet1Rows.map(makeRow).join('\n   ')}
+  </Table>
+ </Worksheet>
+ <Worksheet ss:Name="Transactional Data">
+  <Table>
+   <Row ss:StyleID="Header2">
+    ${sheet2Headers.map(h => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`).join('')}
+   </Row>
+   ${sheet2Rows.map(makeRow).join('\n   ')}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Paymint_Master_Data_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadCSV = (filename, headers, rows) => {
+    const csvContent = [
+      headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
+    ].join('\r\n');
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadLoginDataCSV = () => {
+    const { spendByUser, merchantByUser } = computeUserAggregates();
+    const headers = ["Name", "Age", "Occupation", "Mail ID", "Total Spend (INR)", "Top Spent Area", "Total Transactions", "Coins Balance", "Joined Date"];
+    const rows = users.map(u => {
+      const email = (u.email || '').toLowerCase();
+      const totalSpend = spendByUser[email] || 0;
+      const mCounts = merchantByUser[email] || {};
+      let topMerchant = 'None';
+      let maxM = 0;
+      for (const [m, amt] of Object.entries(mCounts)) {
+        if (amt > maxM) { maxM = amt; topMerchant = m; }
+      }
+      return [
+        u.name || "Anonymous",
+        u.age || "N/A",
+        u.occupation || "N/A",
+        u.email || "",
+        totalSpend.toFixed(2),
+        topMerchant,
+        txns.filter(t => (t.user_email||'').toLowerCase() === email).length,
+        Number(u.coin_balance || 0).toFixed(1),
+        u.joined_at ? new Date(u.joined_at).toLocaleDateString('en-IN') : "N/A"
+      ];
+    });
+    downloadCSV(`paymint_login_data_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+  };
+
+  const downloadTransactionalDataCSV = () => {
+    const headers = ["Date Uploaded", "Time", "Payer Name", "Payee Name", "Transaction ID", "Transaction Amount (INR)", "Coins Earned", "Extra Coins Earned", "Details Provided", "Platform Used", "Bank Name", "Screenshot Link"];
+    const rows = txns.map(t => [
+      t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN') : (t.txn_date || ""),
+      t.created_at ? new Date(t.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : (t.txn_time || ""),
+      t.user_name || (users.find(u=>u.id===t.user_id)?.name) || "Unknown",
+      t.merchant || "",
+      t.txn_id || "N/A",
+      Number(t.amount || 0).toFixed(2),
+      Number(t.base_coins || t.coins || 0).toFixed(1),
+      Number(t.bonus_coins || 0).toFixed(1),
+      t.purchase_note || "None",
+      t.payment_app || "UPI",
+      t.bank || "UPI Bank",
+      t.screenshot_url || "None"
+    ]);
+    downloadCSV(`paymint_transactional_data_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+  };
+
+  const triggerGoogleSheetsSync = async () => {
+    setSyncingSheets(true);
+    setSyncFeedback(null);
+    try {
+      if (webhookUrl) {
+        try { localStorage.setItem("pm_founder_webhook", webhookUrl.trim()); } catch {}
+      }
+      const res = await apiFetch("/api/admin/export", {
+        method: "POST",
+        founderPw,
+        body: { webhookUrl: webhookUrl.trim() || undefined }
+      });
+      if (res && res.ok) {
+        const msg = res.sync_result?.ok 
+          ? `Successfully synced ${res.login_data?.length || 0} users and ${res.transactional_data?.length || 0} txns directly to your Google Sheet!`
+          : `Export data ready (${res.login_data?.length || 0} users, ${res.transactional_data?.length || 0} txns).`;
+        setSyncFeedback({ type: "success", text: msg });
+      } else {
+        setSyncFeedback({ type: "error", text: res?.error || "Sync failed. Check your Webhook URL." });
+      }
+    } catch (err) {
+      setSyncFeedback({ type: "error", text: err.message });
+    } finally {
+      setSyncingSheets(false);
+    }
+  };
+
   return(
     <motion.div initial={{opacity:0,scale:0.96,filter:"blur(6px)"}}
       animate={{opacity:1,scale:1,filter:"blur(0px)"}}
@@ -4691,6 +4913,175 @@ function FounderDashboard({onClose, founderPw}){
         )}
       </AnimatePresence>
 
+      {/* ── FOUNDER EXPORT & GOOGLE SHEETS MODAL ── */}
+      <AnimatePresence>
+        {showExportModal&&(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            style={{position:"absolute",inset:0,zIndex:250,background:"rgba(0,0,0,0.88)",
+              backdropFilter:"blur(20px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+            <motion.div initial={{y:"100%"}} animate={{y:0}} exit={{y:"100%"}} transition={{duration:0.32,ease:"easeOut"}}
+              style={{width:"100%",maxHeight:"90vh",overflowY:"auto",background:"#0A0A0E",
+                borderTop:"1px solid rgba(255,255,255,0.12)",borderRadius:"24px 24px 0 0",
+                padding:"20px 20px 40px",boxSizing:"border-box"}}>
+              
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
+                    <span style={{fontSize:11,fontWeight:700,color:"#107C41",background:"rgba(16,124,65,0.15)",
+                      border:"1px solid rgba(16,124,65,0.35)",borderRadius:12,padding:"2px 8px"}}>
+                      Google Sheets & Drive
+                    </span>
+                    <span style={{fontSize:10.5,color:T.textMute}}>agarwalkrish400@gmail.com</span>
+                  </div>
+                  <h3 style={{margin:0,fontSize:20,fontWeight:800,color:T.text}}>Founder Data Export</h3>
+                  <p style={{margin:"2px 0 0",fontSize:12,color:T.textSub}}>
+                    Multi-sheet dataset with Login & Transaction records
+                  </p>
+                </div>
+                <motion.button whileTap={{scale:0.88}} onClick={()=>setShowExportModal(false)}
+                  style={{width:32,height:32,borderRadius:10,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                    color:T.textMute,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                  ✕
+                </motion.button>
+              </div>
+
+              {/* CARD 1: Direct Cloud Links */}
+              <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",
+                borderRadius:16,padding:"14px",marginBottom:14}}>
+                <p style={{margin:"0 0 10px",fontSize:11,color:T.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                  1. Direct Cloud Access
+                </p>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <motion.a whileTap={{scale:0.98}}
+                    href={sheetUrl} target="_blank" rel="noopener noreferrer"
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",
+                      borderRadius:12,background:"linear-gradient(135deg,rgba(16,124,65,0.22),rgba(16,124,65,0.08))",
+                      border:"1px solid rgba(16,124,65,0.45)",textDecoration:"none",cursor:"pointer"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:32,height:32,borderRadius:8,background:"#107C41",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="#fff" strokeWidth="1.8"/><path d="M4 9h16M4 15h16M10 3v18" stroke="#fff" strokeWidth="1.5"/></svg>
+                      </div>
+                      <div>
+                        <p style={{margin:0,fontSize:13.5,fontWeight:700,color:"#FFF"}}>Open Google Sheet</p>
+                        <p style={{margin:0,fontSize:11,color:"rgba(255,255,255,0.65)"}}>Sheet 1: Login Data • Sheet 2: Transactions</p>
+                      </div>
+                    </div>
+                    <span style={{fontSize:13,color:"#68D391"}}>↗</span>
+                  </motion.a>
+
+                  <motion.a whileTap={{scale:0.98}}
+                    href="https://drive.google.com/drive/u/0/my-drive" target="_blank" rel="noopener noreferrer"
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",
+                      borderRadius:12,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                      textDecoration:"none",cursor:"pointer"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:32,height:32,borderRadius:8,background:"rgba(74,158,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 17l6-10 6 10H3zM9 7l6 10 6-10H9z" stroke={T.blue} strokeWidth="1.6"/></svg>
+                      </div>
+                      <div>
+                        <p style={{margin:0,fontSize:13.5,fontWeight:700,color:T.text}}>Google Drive Screenshots Folder</p>
+                        <p style={{margin:0,fontSize:11,color:T.textMute}}>Saved to agarwalkrish400@gmail.com</p>
+                      </div>
+                    </div>
+                    <span style={{fontSize:13,color:T.blue}}>↗</span>
+                  </motion.a>
+                </div>
+              </div>
+
+              {/* CARD 2: Download Multi-Sheet Excel / CSV */}
+              <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",
+                borderRadius:16,padding:"14px",marginBottom:14}}>
+                <p style={{margin:"0 0 10px",fontSize:11,color:T.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                  2. Offline Spreadsheet Download
+                </p>
+                <motion.button whileTap={{scale:0.98}} onClick={downloadMultiSheetExcel}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                    padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#1A5FC8,#0A3A8A)",
+                    border:"1px solid rgba(74,158,255,0.4)",color:"#FFF",fontSize:13.5,fontWeight:700,
+                    cursor:"pointer",marginBottom:8,fontFamily:"inherit"}}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 10v3a1 1 0 001 1h9a1 1 0 001-1v-3M8 2v9M4.5 7.5L8 11l3.5-3.5" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span>Download Multi-Sheet Excel (.xls)</span>
+                </motion.button>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <motion.button whileTap={{scale:0.96}} onClick={downloadLoginDataCSV}
+                    style={{padding:"9px 10px",borderRadius:10,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                      color:T.textSub,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    Sheet 1 (Login CSV)
+                  </motion.button>
+                  <motion.button whileTap={{scale:0.96}} onClick={downloadTransactionalDataCSV}
+                    style={{padding:"9px 10px",borderRadius:10,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                      color:T.textSub,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    Sheet 2 (Txns CSV)
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* CARD 3: Automated Live Sync to Google Sheets & Drive */}
+              <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",
+                borderRadius:16,padding:"14px",marginBottom:14}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <p style={{margin:0,fontSize:11,color:T.textMute,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                    3. Live Sync to Google Sheets
+                  </p>
+                  <button onClick={()=>setShowScriptHelp(s=>!s)}
+                    style={{background:"none",border:"none",color:T.blue,fontSize:11,fontWeight:600,cursor:"pointer",padding:0}}>
+                    {showScriptHelp ? "Hide Guide" : "Setup Guide (1 min)"}
+                  </button>
+                </div>
+
+                {showScriptHelp&&(
+                  <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}}
+                    style={{background:"rgba(74,158,255,0.05)",border:`1px solid ${T.glassBorder}`,borderRadius:12,
+                      padding:"10px 12px",marginBottom:10,fontSize:11.5,color:T.textSub,lineHeight:1.6}}>
+                    <p style={{margin:"0 0 6px",fontWeight:700,color:T.text}}>Automated Google Sheets & Drive Setup:</p>
+                    <ol style={{margin:0,paddingLeft:16}}>
+                      <li>Open <a href="https://sheets.new" target="_blank" rel="noreferrer" style={{color:T.blue}}>sheets.new</a> on agarwalkrish400@gmail.com</li>
+                      <li>Click <b>Extensions → Apps Script</b></li>
+                      <li>Paste the code from <code style={{color:"#68D391"}}>google_apps_script.js</code></li>
+                      <li>Click <b>Deploy → New Deployment → Web app</b> (Access: Anyone)</li>
+                      <li>Copy Web App URL and paste below!</li>
+                    </ol>
+                  </motion.div>
+                )}
+
+                <div style={{marginBottom:10}}>
+                  <input value={webhookUrl} onChange={e=>setWebhookUrl(e.target.value)}
+                    placeholder="Paste Google Apps Script Web App URL (optional)"
+                    style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1px solid ${T.glassBorder}`,
+                      background:"rgba(0,0,0,0.5)",color:T.text,fontSize:12,fontFamily:"inherit",
+                      outline:"none",boxSizing:"border-box"}}/>
+                </div>
+
+                <motion.button whileTap={{scale:0.98}} onClick={triggerGoogleSheetsSync} disabled={syncingSheets}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,
+                    padding:"11px",borderRadius:10,background:"rgba(16,124,65,0.25)",
+                    border:"1px solid rgba(16,124,65,0.55)",color:"#68D391",fontSize:13,fontWeight:700,
+                    cursor:syncingSheets?"not-allowed":"pointer",fontFamily:"inherit"}}>
+                  {syncingSheets ? "Syncing to Google Sheets & Drive…" : "⚡ Sync All Data to Google Sheet Now"}
+                </motion.button>
+
+                {syncFeedback&&(
+                  <div style={{marginTop:9,padding:"8px 12px",borderRadius:9,
+                    background:syncFeedback.type==="success"?"rgba(16,124,65,0.15)":"rgba(255,96,88,0.15)",
+                    border:`1px solid ${syncFeedback.type==="success"?"rgba(16,124,65,0.4)":"rgba(255,96,88,0.4)"}`}}>
+                    <p style={{margin:0,fontSize:11.5,fontWeight:600,
+                      color:syncFeedback.type==="success"?"#68D391":"#FF6058"}}>
+                      {syncFeedback.text}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div style={{textAlign:"center"}}>
+                <Btn onClick={()=>setShowExportModal(false)} variant="ghost" full>Close</Btn>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div style={{padding:"52px 20px 0",flexShrink:0,
         background:"linear-gradient(to bottom,rgba(0,0,0,0.97),rgba(0,0,0,0.7),transparent)"}}>
@@ -4708,6 +5099,15 @@ function FounderDashboard({onClose, founderPw}){
             <h2 style={{margin:0,fontSize:18,fontWeight:800,color:T.text}}>Admin Dashboard</h2>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <motion.button whileTap={{scale:0.92}} onClick={()=>setShowExportModal(true)}
+              style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:9,
+                background:"rgba(74,158,255,0.12)",border:"1px solid rgba(74,158,255,0.32)",
+                color:T.blue,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2.5 10v3a1 1 0 001 1h9a1 1 0 001-1v-3M8 2v9M4.5 7.5L8 11l3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span>Export</span>
+            </motion.button>
             <motion.button whileTap={{scale:0.9}} onClick={refresh}
               style={{width:32,height:32,borderRadius:9,background:T.glass,border:`1px solid ${T.glassBorder}`,
                 display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
