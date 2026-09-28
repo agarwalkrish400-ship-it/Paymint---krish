@@ -3986,14 +3986,23 @@ function BetaUpload({profile,onDone,onClose}){
     try{
       if(!ssUrl){
         ssUrl=await apiUploadScreenshot(file || savedFile.current);
+        if(ssUrl) savedDataUrl.current = ssUrl;
       }
       log('Screenshot:',ssUrl?'saved to Neon':'none');
     }catch(e){log('Upload error (non-critical):',e.message);}
+
+    const res = await onDone(tx, ssUrl);
+    setSubmitting(false);
+    if (res && res.error) {
+      log('Transaction rejected:', res.message);
+      setPhase('error');
+      setErrMsg(res.message || 'Transaction could not be verified.');
+      return;
+    }
+
     setResult(tx);
     setReviewing(false);
-    setSubmitting(false);
     setPhase('success');
-    onDone(tx,ssUrl);
   };
 
   const handleFile=async(e)=>{
@@ -5179,6 +5188,24 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
 
   const handleTx=async(tx,ssUrl)=>{
     try {
+    // Instant client-side duplicate check against current session transactions
+    const localDup = txns.find(t => {
+      if (tx.txnId && t.txn_id && t.txn_id.trim() === tx.txnId.trim()) return true;
+      const sameAmt = Math.abs(Number(t.amount) - Number(tx.amount)) < 0.01;
+      const sameMerchant = (t.merchant || '').trim().toLowerCase() === (tx.merchant || '').trim().toLowerCase();
+      if (sameAmt && sameMerchant) {
+        if (tx.date && t.txn_date && tx.date === t.txn_date) return true;
+        const ageHours = (Date.now() - new Date(t.created_at).getTime()) / (1000 * 3600);
+        if (ageHours < 24) return true;
+      }
+      return false;
+    });
+    if (localDup) {
+      const msg = "You have already submitted this transaction.";
+      showNotif({ type: "error", title: "Already Submitted", sub: msg });
+      return { error: true, message: msg };
+    }
+
     // Always recalculate coins from amount — never trust OCR-provided coin value
     const earnedCoins = parseFloat((Number(tx.amount) * 0.10).toFixed(1));
     console.log("[DASH] handleTx:", tx.merchant, "₹"+tx.amount, "→ coins:", earnedCoins);
@@ -5189,12 +5216,13 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
     console.log("[DASH] apiSaveTx:", apiResult?.transaction?.id||"FAILED", "coins:", apiResult?.coins_earned);
     if(apiResult?.error || apiResult?.code === "duplicate_transaction" || apiResult?.status === 409){
       const isDup = apiResult?.code === "duplicate_transaction" || /already|duplicate/i.test(apiResult?.message || "");
+      const msg = isDup ? (apiResult?.message || "This transaction was already verified.") : "Could not save transaction. Please try again.";
       showNotif({
         type: "error",
         title: isDup ? "Already Submitted" : "Save Failed",
-        sub: isDup ? (apiResult?.message || "This transaction was already verified.") : "Could not save transaction. Please try again."
+        sub: msg
       });
-      return;
+      return { error: true, message: msg };
     }
     // Use server values — backend is source of truth for coins
     const serverCoins   = apiResult?.coins_earned || earnedCoins;
@@ -5233,6 +5261,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
     // 7. Notification
     showNotif({ type:"earn", title:"Transaction Verified",
       sub:`+${serverCoins} Coins · ${tx.merchant}`, coins:serverCoins });
+    return { ok: true, transaction: newTx };
 
     // 8. Purchase prompt — triggers instant popup for +5% bonus coins
     const insertedId = apiResult?.transaction?.id || newTx.id;
