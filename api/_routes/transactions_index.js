@@ -18,13 +18,34 @@ export default async function handler(req, res) {
     if (!merchant?.trim()) return res.status(400).json({ error: 'Merchant name required' });
     const baseCoins = parseFloat((amt * 0.10).toFixed(1));
     try {
+      // 1. Global duplicate check: UPI UTR / Transaction Ref ID cannot be reused by anyone
       if (txnId?.trim()) {
-        const dup = await sql`SELECT id FROM transactions WHERE user_email=${payload.email} AND txn_id=${txnId.trim()} LIMIT 1`;
-        if (dup.length > 0) return res.status(409).json({ error:'duplicate_transaction', message:'This UTR number was already submitted.' });
-      } else {
-        const dup2 = await sql`SELECT id FROM transactions WHERE user_email=${payload.email} AND amount=${amt} AND merchant=${merchant.trim()} AND created_at>NOW()-INTERVAL '5 minutes' LIMIT 1`;
-        if (dup2.length > 0) return res.status(409).json({ error:'duplicate_transaction', message:'A similar transaction was just submitted.' });
+        const dup = await sql`SELECT id FROM transactions WHERE txn_id=${txnId.trim()} LIMIT 1`;
+        if (dup.length > 0) {
+          return res.status(409).json({ error: 'duplicate_transaction', message: 'This transaction (UTR / Ref ID) was already submitted.' });
+        }
       }
+
+      // 2. Duplicate screenshot check
+      if (screenshotUrl && typeof screenshotUrl === 'string' && screenshotUrl.length > 50) {
+        const dupSs = await sql`SELECT id FROM transactions WHERE screenshot_url=${screenshotUrl} LIMIT 1`;
+        if (dupSs.length > 0) {
+          return res.status(409).json({ error: 'duplicate_transaction', message: 'This screenshot has already been submitted.' });
+        }
+      }
+
+      // 3. User duplicate check: same merchant and amount within same day or last 2 hours
+      let dupUser = [];
+      const trimmedMerchant = merchant.trim();
+      if (txnDate && typeof txnDate === 'string' && txnDate.trim()) {
+        dupUser = await sql`SELECT id FROM transactions WHERE user_id=${payload.userId} AND amount=${amt} AND LOWER(merchant)=LOWER(${trimmedMerchant}) AND (txn_date=${txnDate.trim()} OR created_at > NOW() - INTERVAL '2 hours') LIMIT 1`;
+      } else {
+        dupUser = await sql`SELECT id FROM transactions WHERE user_id=${payload.userId} AND amount=${amt} AND LOWER(merchant)=LOWER(${trimmedMerchant}) AND created_at > NOW() - INTERVAL '2 hours' LIMIT 1`;
+      }
+      if (dupUser.length > 0) {
+        return res.status(409).json({ error: 'duplicate_transaction', message: 'You have already submitted this transaction.' });
+      }
+
       const txRows = await sql`INSERT INTO transactions (user_id,user_email,user_name,merchant,amount,base_coins,bonus_coins,total_coins,txn_id,txn_date,txn_time,payment_app,bank,screenshot_url) VALUES (${payload.userId},${payload.email},${payload.name||''},${merchant.trim()},${amt},${baseCoins},0,${baseCoins},${txnId?.trim()||null},${txnDate||null},${txnTime||null},${paymentApp||null},${bank||null},${screenshotUrl||null}) RETURNING *`;
       await sql`UPDATE users SET coin_balance=coin_balance+${baseCoins},base_coins=base_coins+${baseCoins},updated_at=NOW() WHERE id=${payload.userId}`;
       const uRows = await sql`SELECT coin_balance,base_coins,bonus_coins FROM users WHERE id=${payload.userId}`;

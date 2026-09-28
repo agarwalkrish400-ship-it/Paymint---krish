@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogoBadge, RewardStoreView, FounderRewardsTab } from "./RewardsSystem";
 
@@ -2944,28 +2944,63 @@ async function apiAdminManageReward(action, brand, label, data, pw) {
   return !isErr(r);
 }
 
-// ── Screenshot upload via Cloudinary ─────────────────────────────────────────
+// ── Screenshot upload (Cloudinary with direct Neon base64 fallback) ─────────
 async function apiUploadScreenshot(file) {
-  // Get signed upload params from backend
-  const sigRes = await apiFetch('/api/upload', { method: 'POST' });
-  if (isErr(sigRes)) {
-    console.warn('[UPLOAD] Could not get upload signature — skipping screenshot');
-    return null;
+  if (!file) return null;
+  // If already a Data URL or base64 string, return directly
+  if (typeof file === 'string' && file.startsWith('data:image')) {
+    return file;
   }
+  // 1. Try Cloudinary if configured on backend
   try {
-    const fd = new FormData();
-    fd.append('file',      file);
-    fd.append('api_key',   sigRes.api_key);
-    fd.append('timestamp', sigRes.timestamp);
-    fd.append('signature', sigRes.signature);
-    fd.append('folder',    sigRes.folder);
-    const uploadRes = await fetch(sigRes.url, { method: 'POST', body: fd });
-    const uploadData = await uploadRes.json();
-    return uploadData.secure_url || null;
+    const sigRes = await apiFetch('/api/upload', { method: 'POST' });
+    if (!isErr(sigRes) && sigRes.url && sigRes.api_key) {
+      const fd = new FormData();
+      fd.append('file',      file);
+      fd.append('api_key',   sigRes.api_key);
+      fd.append('timestamp', sigRes.timestamp);
+      fd.append('signature', sigRes.signature);
+      fd.append('folder',    sigRes.folder);
+      const uploadRes = await fetch(sigRes.url, { method: 'POST', body: fd });
+      const uploadData = await uploadRes.json();
+      if (uploadData.secure_url) return uploadData.secure_url;
+    }
   } catch (e) {
-    console.warn('[UPLOAD] Cloudinary upload failed:', e.message);
-    return null;
+    console.warn('[UPLOAD] Cloudinary upload skipped:', e.message);
   }
+
+  // 2. Direct fallback: Compress to lightweight JPEG base64 and store directly in Neon DB!
+  try {
+    if (file instanceof Blob || (typeof File !== 'undefined' && file instanceof File)) {
+      return await new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          const maxW = 900;
+          const scale = img.width > maxW ? maxW / img.width : 1;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
+          resolve(dataUrl);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(file);
+        };
+        img.src = url;
+      });
+    }
+  } catch (e) {
+    console.warn('[UPLOAD] Fallback compression failed:', e.message);
+  }
+  return null;
 }
 
 
@@ -3826,16 +3861,25 @@ function extractUPIData(text, log) {
   let merchant = '';
   for (const p of [
     /(?:paid\s+to|sent\s+to|money\s+sent\s+to|transferred\s+to)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
+    /(?:^|\n)\s*To[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
     /(?:to|payee|beneficiary|recipient)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
     /(?:merchant|vendor|store)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
   ]) {
     const m = t.match(p);
-    if (m) { const raw=m[1].split(/[\n\r:|,]/)[0].trim(); if(raw.length>1){merchant=raw.slice(0,40);break;} }
+    if (m) {
+      let raw = m[1].split(/[\n\r:|,]/)[0].trim();
+      raw = raw.replace(/\+91\s*[\d\s.*-]+/, '').trim();
+      if (raw.length > 1 && !/^(?:account|upi\s*id|bank|self)$/i.test(raw)) {
+        merchant = raw.slice(0, 40);
+        break;
+      }
+    }
   }
 
   let txnId = '';
   for (const p of [
     /(?:upi\s*ref(?:erence)?|utr(?:\s*no)?|txn\s*(?:id|no)|transaction\s*(?:id|no)|ref(?:erence)?\s*(?:no|id|#)?)[:\s#]*([A-Z0-9]{8,30})/i,
+    /\b([0-9]{12})\b/,
     /\b([0-9]{10,15})\b/,
   ]) {
     const m = t.match(p); if(m){txnId=m[1].trim();break;}
@@ -3843,6 +3887,8 @@ function extractUPIData(text, log) {
 
   let date='';
   const mths={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  const comboM = t.match(/(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+\d{4})[,\s]+(?:at\s+)?(\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)/i);
+
   for (const{re,fn}of[
     {re:/(\d{4})[-/](\d{2})[-/](\d{2})/,        fn:m=>`${m[1]}-${m[2]}-${m[3]}`},
     {re:/(\d{2})[-/](\d{2})[-/](\d{4})/,        fn:m=>`${m[3]}-${m[2]}-${m[1]}`},
@@ -3850,16 +3896,43 @@ function extractUPIData(text, log) {
       fn:m=>`${m[3]}-${mths[m[2].toLowerCase().slice(0,3)]||'01'}-${m[1].padStart(2,'0')}`},
     {re:/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+(\d{1,2})[,.]?\s+(\d{4})/i,
       fn:m=>`${m[3]}-${mths[m[1].toLowerCase().slice(0,3)]||'01'}-${m[2].padStart(2,'0')}`},
-  ]){const m=t.match(re);if(m){try{date=fn(m);}catch(e){date='';}if(date)break;}}
+  ]){
+    const m = (comboM ? comboM[1] : t).match(re) || t.match(re);
+    if(m){try{date=fn(m);}catch(e){date='';}if(date)break;}
+  }
 
   let time='';
-  const tM=t.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?/i);
-  if(tM){let hh=parseInt(tM[1]),mm=parseInt(tM[2]);const p=tM[3];
-    if(p){if(/pm/i.test(p)&&hh<12)hh+=12;if(/am/i.test(p)&&hh===12)hh=0;}
-    if(hh>=0&&hh<=23&&mm>=0&&mm<=59)time=`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;}
+  // 1. Highest priority: explicit time with AM/PM (avoids phone status bar clock at the top)
+  const ampmMatches = [...t.matchAll(/\b(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)\b/gi)];
+  if (ampmMatches.length > 0) {
+    const lastM = ampmMatches[ampmMatches.length - 1];
+    let hh = parseInt(lastM[1]), mm = parseInt(lastM[2]);
+    const p = lastM[3].toLowerCase();
+    if (p === 'pm' && hh < 12) hh += 12;
+    if (p === 'am' && hh === 12) hh = 0;
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) time = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  } else if (comboM && comboM[2]) {
+    const tM = comboM[2].match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?/i);
+    if (tM) {
+      let hh = parseInt(tM[1]), mm = parseInt(tM[2]);
+      const p = tM[3];
+      if (p) { if (/pm/i.test(p) && hh < 12) hh += 12; if (/am/i.test(p) && hh === 12) hh = 0; }
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) time = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    }
+  } else {
+    // Search non-first lines to avoid phone top bar
+    const subText = lines.slice(1).join('\n');
+    const tM = subText.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?/i) || t.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?/i);
+    if (tM) {
+      let hh = parseInt(tM[1]), mm = parseInt(tM[2]);
+      const p = tM[3];
+      if (p) { if (/pm/i.test(p) && hh < 12) hh += 12; if (/am/i.test(p) && hh === 12) hh = 0; }
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) time = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    }
+  }
 
   let bank='';
-  const bM=t.match(/(?:sbi|state bank|hdfc|icici|axis|kotak|pnb|bob|union bank|yes bank|idbi|federal|canara)[^\n]*/i);
+  const bM=t.match(/(?:sbi|state bank|hdfc|icici|axis|kotak|pnb|bob|union bank|yes bank|idbi|federal|canara|au small finance)[^\n]*/i);
   if(bM)bank=bM[0].trim().slice(0,30);
 
   // Confidence scoring for non-amount fields
@@ -3886,6 +3959,7 @@ function BetaUpload({profile,onDone,onClose}){
   const [submitting,setSubmitting]= useState(false);
   const fileRef  = useRef();
   const savedFile= useRef();
+  const savedDataUrl = useRef(null);
 
   const log=(...args)=>{
     console.log('[OCR]',...args);
@@ -3908,12 +3982,12 @@ function BetaUpload({profile,onDone,onClose}){
       ts:       new Date().toISOString(),
     };
     log('Finalising tx:',JSON.stringify(tx));
-    let ssUrl=null;
+    let ssUrl=savedDataUrl.current || null;
     try{
-      const safeName   =file.name.replace(/[^a-z0-9._-]/gi,'_');
-      const storagePath=`${profile.email.replace(/[^a-z0-9]/gi,'_')}/${Date.now()}_${safeName}`;
-      ssUrl=await apiUploadScreenshot(file);
-      log('Screenshot:',ssUrl||'upload failed (non-critical)');
+      if(!ssUrl){
+        ssUrl=await apiUploadScreenshot(file || savedFile.current);
+      }
+      log('Screenshot:',ssUrl?'saved to Neon':'none');
     }catch(e){log('Upload error (non-critical):',e.message);}
     setResult(tx);
     setReviewing(false);
@@ -3928,7 +4002,16 @@ function BetaUpload({profile,onDone,onClose}){
     // Reset input so same file can be re-uploaded if needed, but clear AFTER capturing file
     if(fileRef.current) fileRef.current.value='';
     setPhase('processing');setDebugLog([]);setReviewing(false);
+    savedFile.current = file;
+    savedDataUrl.current = null;
     log('File:',file.name,file.type,file.size,'bytes');
+
+    // Immediately pre-compress screenshot in background as guaranteed fallback
+    try {
+      apiUploadScreenshot(file).then(u => {
+        if(u) { savedDataUrl.current = u; log('Screenshot pre-compressed'); }
+      });
+    } catch(e) {}
 
     // STEP 1: Canvas preprocessing
     let blob=file;
@@ -4052,26 +4135,43 @@ function BetaUpload({profile,onDone,onClose}){
       return;
     }
 
-    // STEP 5b: 30-minute window check (lenient — skip if date/time not found)
+    // STEP 5b: 120-minute (2 hours) window check (lenient — skip if date/time not found)
     if(extracted.date && extracted.time){
       try{
-        const txTime=new Date(`${extracted.date}T${extracted.time}:00`);
+        let txTime=new Date(`${extracted.date}T${extracted.time}:00`);
         if(!isNaN(txTime.getTime())){
-          const diffMin=(Date.now()-txTime)/(1000*60);
-          log('60-min check: tx at '+extracted.date+' '+extracted.time+', diff='+diffMin.toFixed(1)+'min');
-          if(diffMin>60){
-            log('EXPIRED: '+diffMin.toFixed(1)+' minutes since transaction (limit: 60 min)');
+          let diffMin=(Date.now()-txTime.getTime())/(1000*60);
+          log('120-min check: tx at '+extracted.date+' '+extracted.time+', raw diff='+diffMin.toFixed(1)+'min');
+
+          // AM/PM ambiguity correction: If time lacked AM/PM, it might be ~12 hours (720 min) off
+          if(diffMin > 600 && diffMin < 840){
+            const altTime = new Date(txTime.getTime() + 12*60*60*1000);
+            const altDiff = (Date.now()-altTime.getTime())/(1000*60);
+            if(Math.abs(altDiff) <= 120){
+              log('Corrected 12h AM/PM offset: diff was '+diffMin.toFixed(1)+'min -> now '+altDiff.toFixed(1)+'min');
+              txTime = altTime;
+              diffMin = altDiff;
+            }
+          }
+
+          // Tolerance for small clock drift (e.g. phone clock 1-5 mins ahead of server)
+          if(diffMin < 0 && diffMin > -15){
+            diffMin = 0;
+          }
+
+          if(diffMin > 120){
+            log('EXPIRED: '+diffMin.toFixed(1)+' minutes since transaction (limit: 120 min / 2 hours)');
             setPhase('expired');
             return;
           }
         }else{
-          log('30-min check: invalid date/time format, skipping (lenient)');
+          log('120-min check: invalid date/time format, skipping (lenient)');
         }
       }catch(e){
-        log('30-min check: parse error, skipping —',e.message);
+        log('120-min check: parse error, skipping —',e.message);
       }
     }else{
-      log('30-min check: no date/time extracted, skipping (lenient mode)');
+      log('120-min check: no date/time extracted, skipping (lenient mode)');
     }
 
     // STEP 6: Route by confidence
@@ -4116,7 +4216,7 @@ function BetaUpload({profile,onDone,onClose}){
               <motion.div key="idle" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}}>
                 <h3 style={{margin:"0 0 6px",fontSize:20,fontWeight:800,color:T.text}}>Upload UPI Screenshot</h3>
                 <p style={{margin:"0 0 18px",fontSize:13,color:T.textSub,lineHeight:1.6}}>
-                  Upload within 30 minutes of payment to earn coins.
+                  Upload within 2 hours of payment to earn coins.
                 </p>
                 <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:20}}>
                   {["Google Pay (GPay)","PhonePe","Paytm","BHIM","Bank UPI Apps"].map(app=>(
@@ -4221,7 +4321,7 @@ function BetaUpload({profile,onDone,onClose}){
                 </div>
                 <h3 style={{margin:"0 0 6px",fontSize:18,fontWeight:800,color:T.error}}>Upload Window Expired</h3>
                 <p style={{margin:"0 0 20px",fontSize:13,color:T.textSub,lineHeight:1.6}}>
-                  You must upload within 30 minutes of the transaction. This screenshot is too old.
+                  You must upload within 2 hours of the transaction. This screenshot is too old.
                 </p>
                 <Btn onClick={()=>setPhase("idle")} full>Try Another</Btn>
               </motion.div>
@@ -4939,13 +5039,11 @@ function FounderDashboard({onClose, founderPw}){
 // BETA DASHBOARD — Neon PostgreSQL backend, founder 5-tap
 // ══════════════════════════════════════════════════════════════════════════════
 function DismissTimer({id,onDismiss}){
-  const seen=useRef(false);
   useEffect(()=>{
-    if(!id) return; // no active prompt
-    if(seen.current)return; seen.current=true;
-    const t=setTimeout(onDismiss,8000);
+    if(!id) return;
+    const t=setTimeout(onDismiss, 6000);
     return()=>clearTimeout(t);
-  },[id]);
+  },[id, onDismiss]);
   return null;
 }
 
@@ -5029,8 +5127,14 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
   const showNotif=(n)=>{
     setNotif(n);
     if(notifTimer.current)clearTimeout(notifTimer.current);
-    notifTimer.current=setTimeout(()=>setNotif(null),5000);
+    notifTimer.current=setTimeout(()=>setNotif(null),3600);
   };
+
+  useEffect(()=>{
+    if(!notif) return;
+    const t=setTimeout(()=>setNotif(null), 4000);
+    return()=>clearTimeout(t);
+  },[notif]);
 
   const handleSavePurchase=async()=>{
     if(!purchaseNote.trim()||savingNote) return;
@@ -5083,8 +5187,13 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
     // 1. Save to backend (server calculates and validates coins)
     const apiResult = await apiSaveTx(tx, ssUrl);
     console.log("[DASH] apiSaveTx:", apiResult?.transaction?.id||"FAILED", "coins:", apiResult?.coins_earned);
-    if(apiResult?.code === "duplicate_transaction"){
-      showNotif({type:"error", title:"Already Submitted", sub:"This transaction was already verified."});
+    if(apiResult?.error || apiResult?.code === "duplicate_transaction" || apiResult?.status === 409){
+      const isDup = apiResult?.code === "duplicate_transaction" || /already|duplicate/i.test(apiResult?.message || "");
+      showNotif({
+        type: "error",
+        title: isDup ? "Already Submitted" : "Save Failed",
+        sub: isDup ? (apiResult?.message || "This transaction was already verified.") : "Could not save transaction. Please try again."
+      });
       return;
     }
     // Use server values — backend is source of truth for coins
@@ -5217,48 +5326,43 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
         )}
       </AnimatePresence>
 
-      {/* ── PURCHASE PROMPT NOTIFICATION ── */}
+      {/* â”€â”€ PURCHASE PROMPT NOTIFICATION â”€â”€ */}
       <AnimatePresence>
         {purchasePromptTxId&&(
           <motion.div key={"pp"+purchasePromptTxId}
-            initial={{y:-110,scale:0.78,opacity:0}} animate={{y:0,scale:1,opacity:1}}
-            exit={{y:-90,scale:0.88,opacity:0}} transition={{...SP.island}}
+            initial={{x:"-50%",y:-90,scale:0.88,opacity:0}} animate={{x:"-50%",y:0,scale:1,opacity:1}}
+            exit={{x:"-50%",y:-80,scale:0.88,opacity:0}} transition={{duration:0.28,ease:"easeOut"}}
             onClick={()=>{setPurchaseInputTxId(purchasePromptTxId);setPurchaseNote("");setPurchasePromptTxId(null);}}
-            style={{position:"absolute",top:52,left:"50%",zIndex:510,
-              width:"calc(100% - 32px)",maxWidth:360,cursor:"pointer",transform:"translateX(-50%)"}}>
-            <motion.div
-              initial={{width:120,height:34,borderRadius:100}}
-              animate={{width:"100%",height:72,borderRadius:22}}
-              transition={{...SP.island,delay:0.05}}
+            style={{position:"absolute",top:48,left:"50%",zIndex:510,
+              width:"calc(100% - 32px)",maxWidth:360,cursor:"pointer"}}>
+            <div
               style={{background:"rgba(10,10,14,0.96)",backdropFilter:"blur(36px)",
-                border:"1px solid rgba(255,255,255,0.11)",overflow:"hidden",
-                boxShadow:"0 0 0 1px rgba(255,255,255,0.05) inset,0 14px 50px rgba(0,0,0,0.7)"}}>
-              <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.3}}
-                style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 14px",gap:12}}>
-                <motion.div initial={{scale:0}} animate={{scale:1}} transition={{delay:0.36,...SP.bouncy}}
-                  style={{width:44,height:44,borderRadius:13,flexShrink:0,
-                    background:"rgba(232,196,106,0.14)",border:"1px solid rgba(232,196,106,0.3)",
-                    display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-                    <circle cx="11" cy="11" r="9" stroke="#E8C46A" strokeWidth="1.6"/>
-                    <path d="M11 7v4.5l3 1.5" stroke="#E8C46A" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                </motion.div>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{margin:0,fontSize:12.5,fontWeight:700,color:"#F2F2F7",lineHeight:1.2}}>
-                    Your reward is almost complete!
-                  </p>
-                  <p style={{margin:"2px 0 0",fontSize:11,color:"#E8C46A",fontWeight:600}}>
-                    Tell us what you bought → earn +{(bonusPendingTxIds[purchasePromptTxId]||0).toFixed(1)} bonus coins
-                  </p>
-                </div>
-                <motion.div initial={{scale:0}} animate={{scale:1}} transition={{delay:0.42,...SP.bouncy}}
-                  style={{background:"rgba(232,196,106,0.15)",border:"1px solid rgba(232,196,106,0.35)",
-                    borderRadius:20,padding:"5px 11px",flexShrink:0}}>
-                  <span style={{fontSize:11.5,fontWeight:700,color:"#E8C46A"}}>Add</span>
-                </motion.div>
-              </motion.div>
-            </motion.div>
+                border:"1px solid rgba(255,255,255,0.11)",borderRadius:20,overflow:"hidden",
+                boxShadow:"0 0 0 1px rgba(255,255,255,0.05) inset,0 14px 50px rgba(0,0,0,0.7)",
+                display:"flex",alignItems:"center",padding:"12px 14px",gap:12}}>
+              <div
+                style={{width:44,height:44,borderRadius:13,flexShrink:0,
+                  background:"rgba(232,196,106,0.14)",border:"1px solid rgba(232,196,106,0.3)",
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+                  <circle cx="11" cy="11" r="9" stroke="#E8C46A" strokeWidth="1.6"/>
+                  <path d="M11 7v4.5l3 1.5" stroke="#E8C46A" strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{margin:0,fontSize:12.5,fontWeight:700,color:"#F2F2F7",lineHeight:1.2}}>
+                  Your reward is almost complete!
+                </p>
+                <p style={{margin:"2px 0 0",fontSize:11,color:"#E8C46A",fontWeight:600}}>
+                  Tell us what you bought â†’ earn +{(bonusPendingTxIds[purchasePromptTxId]||0).toFixed(1)} bonus coins
+                </p>
+              </div>
+              <div
+                style={{background:"rgba(232,196,106,0.15)",border:"1px solid rgba(232,196,106,0.35)",
+                  borderRadius:20,padding:"5px 11px",flexShrink:0}}>
+                <span style={{fontSize:11.5,fontWeight:700,color:"#E8C46A"}}>Add</span>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -5398,46 +5502,39 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
       <AnimatePresence>
         {notif&&(
           <motion.div key={notif.title+notif.sub}
-            initial={{y:-110,scale:0.78,opacity:0}} animate={{y:0,scale:1,opacity:1}}
-            exit={{y:-90,scale:0.88,opacity:0}} transition={{...SP.island}}
+            initial={{x:"-50%",y:-90,scale:0.88,opacity:0}} animate={{x:"-50%",y:0,scale:1,opacity:1}}
+            exit={{x:"-50%",y:-80,scale:0.88,opacity:0}} transition={{duration:0.28,ease:"easeOut"}}
             onClick={()=>setNotif(null)}
-            style={{position:"absolute",top:52,left:"50%",zIndex:500,
-              width:"calc(100% - 32px)",maxWidth:360,cursor:"pointer",
-              transform:"translateX(-50%)"}}>
-            <motion.div
-              initial={{width:120,height:34,borderRadius:100}}
-              animate={{width:"100%",height:70,borderRadius:22}}
-              transition={{...SP.island,delay:0.05}}
-              style={{background:"rgba(10,10,14,0.94)",backdropFilter:"blur(36px)",
-                border:"1px solid rgba(255,255,255,0.11)",overflow:"hidden",position:"relative",
-                boxShadow:"0 0 0 1px rgba(255,255,255,0.05) inset,0 14px 50px rgba(0,0,0,0.7)"}}>
-              <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.3}}
-                style={{position:"absolute",inset:0,display:"flex",alignItems:"center",padding:"0 14px",gap:12}}>
-                <motion.div initial={{scale:0}} animate={{scale:1}} transition={{delay:0.36,...SP.bouncy}}
-                  style={{width:42,height:42,borderRadius:13,flexShrink:0,
-                    background:notif.type==="redeem"?"rgba(232,196,106,0.14)":"rgba(74,158,255,0.14)",
-                    border:`1px solid ${notif.type==="redeem"?"rgba(232,196,106,0.28)":"rgba(74,158,255,0.28)"}`,
-                    display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  {notif.type==="redeem"
-                    ?<svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5 5.5.8-4 3.9.95 5.5L10 14.5l-4.95 2.7.95-5.5L2 6.8l5.5-.8z" fill={T.gold} fillOpacity="0.3" stroke={T.gold} strokeWidth="1.3" strokeLinejoin="round"/></svg>
-                    :<svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" fill="none" stroke={T.blue} strokeWidth="1.4"/><text x="10" y="14" textAnchor="middle" fill={T.blue} fontSize="8.5" fontWeight="800" fontFamily="Inter,sans-serif">P</text></svg>
-                  }
-                </motion.div>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{margin:0,fontSize:12.5,fontWeight:700,color:T.text,lineHeight:1.2}}>{notif.title}</p>
-                  <p style={{margin:"2px 0 0",fontSize:11,color:T.textSub}}>{notif.sub}</p>
+            style={{position:"absolute",top:48,left:"50%",zIndex:500,
+              width:"calc(100% - 32px)",maxWidth:360,cursor:"pointer"}}>
+            <div
+              style={{background:"rgba(10,10,14,0.96)",backdropFilter:"blur(36px)",
+                border:"1px solid rgba(255,255,255,0.12)",borderRadius:20,overflow:"hidden",position:"relative",
+                boxShadow:"0 0 0 1px rgba(255,255,255,0.05) inset,0 14px 50px rgba(0,0,0,0.7)",
+                display:"flex",alignItems:"center",padding:"12px 14px",gap:12}}>
+              <div
+                style={{width:42,height:42,borderRadius:13,flexShrink:0,
+                  background:notif.type==="redeem"?"rgba(232,196,106,0.14)":"rgba(74,158,255,0.14)",
+                  border:`1px solid ${notif.type==="redeem"?"rgba(232,196,106,0.28)":"rgba(74,158,255,0.28)"}`,
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {notif.type==="redeem"
+                  ?<svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5 5.5.8-4 3.9.95 5.5L10 14.5l-4.95 2.7.95-5.5L2 6.8l5.5-.8z" fill={T.gold} fillOpacity="0.3" stroke={T.gold} strokeWidth="1.3" strokeLinejoin="round"/></svg>
+                  :<svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" fill="none" stroke={T.blue} strokeWidth="1.4"/><text x="10" y="14" textAnchor="middle" fill={T.blue} fontSize="8.5" fontWeight="800" fontFamily="Inter,sans-serif">P</text></svg>
+                }
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{margin:0,fontSize:12.5,fontWeight:700,color:T.text,lineHeight:1.2}}>{notif.title}</p>
+                <p style={{margin:"2px 0 0",fontSize:11,color:T.textSub}}>{notif.sub}</p>
+              </div>
+              {notif.coins&&(
+                <div
+                  style={{background:"rgba(232,196,106,0.12)",border:"1px solid rgba(232,196,106,0.26)",
+                    borderRadius:20,padding:"4px 9px",flexShrink:0,display:"flex",alignItems:"center",gap:4}}>
+                  <div style={{width:5,height:5,borderRadius:"50%",background:T.gold}}/>
+                  <span style={{fontSize:11.5,fontWeight:800,color:T.gold}}>+{notif.coins}</span>
                 </div>
-                {notif.coins&&(
-                  <motion.div initial={{scale:0}} animate={{scale:1}} transition={{delay:0.4,...SP.bouncy}}
-                    style={{background:"rgba(232,196,106,0.12)",border:"1px solid rgba(232,196,106,0.26)",
-                      borderRadius:20,padding:"4px 9px",flexShrink:0,display:"flex",alignItems:"center",gap:4}}>
-                    <motion.div animate={{scale:[1,1.5,1]}} transition={{duration:0.9,repeat:Infinity}}
-                      style={{width:5,height:5,borderRadius:"50%",background:T.gold}}/>
-                    <span style={{fontSize:11.5,fontWeight:800,color:T.gold}}>+{notif.coins}</span>
-                  </motion.div>
-                )}
-              </motion.div>
-            </motion.div>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
