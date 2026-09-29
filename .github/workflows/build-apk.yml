@@ -42,8 +42,7 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          set -o pipefail
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle-build.log
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle-build.log || (echo "=== GRADLE BUILD ERROR ===" && cat ../gradle-build.log && exit 1)
 
       - name: Upload Build Log On Failure
         if: failure()
