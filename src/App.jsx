@@ -4943,7 +4943,7 @@ function FounderDashboard({onClose, founderPw}){
     u.occupation?.toLowerCase().includes(search.toLowerCase())
   );
   const totalSpend=txns.reduce((s,t)=>s+Number(t.amount||0),0);
-  const totalCoins=txns.reduce((s,t)=>s+Number(t.coins||0),0);
+  const totalCoins=(data?.overview?.stats?.total_coins_issued != null)?Number(data.overview.stats.total_coins_issued):txns.reduce((s,t)=>s+Number(t.total_coins||t.coins||t.base_coins||(Number(t.amount||0)*0.10)||0),0);
   const merchantMap=txns.reduce((a,t)=>{const m=t.merchant||"Unknown";a[m]=(a[m]||0)+1;return a;},{});
   const topMerchants=Object.entries(merchantMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
@@ -5653,7 +5653,7 @@ function FounderDashboard({onClose, founderPw}){
                             </div>
                             <div style={{textAlign:"right"}}>
                               <p style={{margin:0,fontSize:13,fontWeight:700,color:T.text}}>₹{fmt(tx.amount)}</p>
-                              <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{tx.coins}</p>
+                              <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{Number(tx.total_coins||tx.coins||tx.base_coins||(Number(tx.amount||0)*0.10)||0).toFixed(1)} coins</p>
                             </div>
                           </div>
                           {tx.screenshot_url&&(
@@ -5758,7 +5758,7 @@ function FounderDashboard({onClose, founderPw}){
                         </div>
                         <div style={{textAlign:"right",flexShrink:0}}>
                           <p style={{margin:0,fontSize:13.5,fontWeight:700,color:T.text}}>₹{fmt(tx.amount)}</p>
-                          <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{tx.coins}</p>
+                          <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{Number(tx.total_coins||tx.coins||tx.base_coins||(Number(tx.amount||0)*0.10)||0).toFixed(1)} coins</p>
                         </div>
                       </div>
                     </div>
