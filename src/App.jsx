@@ -3715,6 +3715,90 @@ function score_candidate(val, raw, line, li, total, hasSym, ctxB, ctxA, ambiguou
   return Math.max(sc, 0);
 }
 
+// ── Anti-Tamper & Fraud Detection Helpers ─────────────────────────────────────
+function getJulianDay(date) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = (date - start) + ((start.getTimezoneOffset() - date.getTimezoneOffset()) * 60 * 1000);
+  const oneDay = 1000 * 60 * 60 * 24;
+  return Math.floor(diff / oneDay);
+}
+
+function verifyUpiUtrJulianDate(utr, dateStr) {
+  if (!utr || typeof utr !== 'string') return { valid: true, skipped: true };
+  const cleanUtr = utr.trim().replace(/\s+/g, '');
+  if (!/^\d{12}$/.test(cleanUtr)) {
+    return { valid: true, skipped: true, reason: 'non-12-digit UTR' };
+  }
+
+  const utrYearDigit = parseInt(cleanUtr[0]);
+  const utrJulianDay = parseInt(cleanUtr.slice(1, 4));
+
+  let targetDate = new Date();
+  if (dateStr) {
+    const p = new Date(dateStr);
+    if (!isNaN(p.getTime())) targetDate = p;
+  }
+
+  const expectedYearDigit = targetDate.getFullYear() % 10;
+  const expectedJulianDay = getJulianDay(targetDate);
+
+  const yearDiff = Math.abs(utrYearDigit - expectedYearDigit);
+  const dayDiff = Math.abs(utrJulianDay - expectedJulianDay);
+
+  if (yearDiff !== 0 && !(yearDiff === 1 && (expectedJulianDay <= 2 || expectedJulianDay >= 364))) {
+    return {
+      valid: false,
+      reason: `UPI Reference ID (UTR) verification failed: year code ${utrYearDigit} does not match transaction year ${expectedYearDigit}.`
+    };
+  }
+
+  if (dayDiff > 2 && dayDiff < 363) {
+    return {
+      valid: false,
+      reason: `UPI Reference ID (UTR) verification failed: day code ${utrJulianDay} contradicts transaction date (expected day ${expectedJulianDay}).`
+    };
+  }
+
+  return { valid: true, utrJulianDay, expectedJulianDay };
+}
+
+function verifyStatusBarVsTxTime(statusBarTimeStr, txTimeStr) {
+  if (!statusBarTimeStr || !txTimeStr) return { valid: true, skipped: true };
+
+  const parseMin = (s) => {
+    const parts = s.split(':').map(Number);
+    return parts[0] * 60 + parts[1];
+  };
+
+  const statusMin = parseMin(statusBarTimeStr);
+  let txMin = parseMin(txTimeStr);
+
+  let forwardDiff = txMin - statusMin;
+  if (forwardDiff < -720) forwardDiff += 1440;
+
+  // If transaction time is ahead of phone status bar time by > 4 minutes:
+  if (forwardDiff > 4 && forwardDiff < 720) {
+    return {
+      valid: false,
+      reason: `Screenshot timing contradiction: Transaction time (${txTimeStr}) is ahead of device status bar clock (${statusBarTimeStr}).`
+    };
+  }
+
+  return { valid: true };
+}
+
+function verifyImageFileMetadata(fileName) {
+  if (!fileName) return { valid: true };
+  const lower = fileName.toLowerCase();
+  const editorKeywords = ['picsart', 'photoshop', 'snapseed', 'canva', 'inshot', 'lightroom', 'photo_editor', 'markup', 'edited_'];
+  for (const kw of editorKeywords) {
+    if (lower.includes(kw)) {
+      return { valid: false, reason: `Edited screenshot detected (${kw}). Please upload an original screenshot directly from your payment app.` };
+    }
+  }
+  return { valid: true };
+}
+
 // ── Payment Direction Detection (Outgoing / Paid vs Incoming / Received) ─────
 function detectPaymentDirection(text) {
   const t = text.toLowerCase();
@@ -4098,6 +4182,17 @@ function BetaUpload({profile,onDone,onClose}){
       setSubmitting(false);
       return;
     }
+    if (parsed.txnId) {
+      const utrCheck = verifyUpiUtrJulianDate(parsed.txnId, parsed.date);
+      if (!utrCheck.valid) {
+        log('REJECTED UTR in finaliseTx: ' + utrCheck.reason);
+        setPhase('error');
+        setErrMsg(utrCheck.reason);
+        setSubmitting(false);
+        return;
+      }
+    }
+    
     // Strict 2-hour window check before finalizing
     const winCheck = checkTransactionWindow(parsed.date, parsed.time, file?.lastModified);
     if (winCheck.expired) {
@@ -4153,6 +4248,13 @@ function BetaUpload({profile,onDone,onClose}){
     savedFile.current = file;
     savedDataUrl.current = null;
     log('File:',file.name,file.type,file.size,'bytes');
+    const metaCheck = verifyImageFileMetadata(file.name);
+    if (!metaCheck.valid) {
+      log('REJECTED:', metaCheck.reason);
+      setPhase('error');
+      setErrMsg(metaCheck.reason);
+      return;
+    }
 
     // Immediately pre-compress screenshot in background as guaranteed fallback
     try {
@@ -4296,6 +4398,26 @@ function BetaUpload({profile,onDone,onClose}){
       log('EXPIRED: Transaction is older than 2 hours (' + winCheck.reason + ')');
       setPhase('expired');
       return;
+    }
+
+        // STEP 5c: Anti-Tamper Validations (UTR Julian day & Status bar clock cross-check)
+    if (extracted.txnId) {
+      const utrCheck = verifyUpiUtrJulianDate(extracted.txnId, extracted.date);
+      if (!utrCheck.valid) {
+        log('REJECTED UTR check:', utrCheck.reason);
+        setPhase('error');
+        setErrMsg(utrCheck.reason);
+        return;
+      }
+    }
+    if (extracted.statusBarTime && extracted.time) {
+      const clockCheck = verifyStatusBarVsTxTime(extracted.statusBarTime, extracted.time);
+      if (!clockCheck.valid) {
+        log('REJECTED clock check:', clockCheck.reason);
+        setPhase('error');
+        setErrMsg(clockCheck.reason);
+        return;
+      }
     }
 
     // STEP 6: Route by confidence
@@ -4603,6 +4725,14 @@ function BetaUpload({profile,onDone,onClose}){
                         setPhase('error');
                         setErrMsg('Payment Received screenshot detected. Coins are only earned when you make a payment to someone (sent / paid). Money received does not earn coins.');
                         return;
+                      }
+                      if (review.txnId) {
+                        const utrCheck = verifyUpiUtrJulianDate(review.txnId, review.date);
+                        if (!utrCheck.valid) {
+                          setPhase('error');
+                          setErrMsg(utrCheck.reason);
+                          return;
+                        }
                       }
                       // Strict 2-hour window check on review confirmation
                       const winCheck = checkTransactionWindow(review.date, review.time, savedFile.current?.lastModified);
@@ -5775,6 +5905,14 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
       const msg = "Coins are only credited for payments made to merchants or individuals. Received payments are not eligible for coins.";
       showNotif({ type: "error", title: "Ineligible Payment", sub: msg });
       return { error: true, message: msg };
+    }
+    // Anti-tamper UTR check in handleTx
+    if (tx.txnId) {
+      const utrCheck = verifyUpiUtrJulianDate(tx.txnId, tx.date);
+      if (!utrCheck.valid) {
+        showNotif({ type: 'error', title: 'Verification Failed', sub: utrCheck.reason });
+        return { error: true, message: utrCheck.reason };
+      }
     }
     // Strict 2-hour window check
     if (tx.date || tx.time) {
