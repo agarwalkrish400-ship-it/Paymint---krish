@@ -18,6 +18,43 @@ export default async function handler(req, res) {
     if (!merchant?.trim()) return res.status(400).json({ error: 'Merchant name required' });
     const baseCoins = parseFloat((amt * 0.10).toFixed(1));
     try {
+    // 0. Strict 2-hour (120-minute) window check on backend (IST UTC+5:30)
+    if (txnDate && typeof txnDate === 'string' && txnDate.trim()) {
+      const dStr = txnDate.trim();
+      const tStr = (txnTime && typeof txnTime === 'string') ? txnTime.trim() : null;
+      const now = new Date();
+      const nowIst = new Date(now.getTime() + (5.5 * 3600 * 1000));
+
+      if (tStr) {
+        let txDateObj = new Date(`${dStr}T${tStr}:00+05:30`);
+        if (!isNaN(txDateObj.getTime())) {
+          let diffMin = (now.getTime() - txDateObj.getTime()) / (60 * 1000);
+          // AM/PM ambiguity correction (12-hour shift)
+          if (diffMin > 600 && diffMin < 840) {
+            const altDateObj = new Date(txDateObj.getTime() + 12 * 60 * 60 * 1000);
+            const altDiff = (now.getTime() - altDateObj.getTime()) / (60 * 1000);
+            if (Math.abs(altDiff) <= 120) diffMin = altDiff;
+          }
+          if (diffMin < 0 && diffMin >= -15) diffMin = 0; // tolerance for slight clock drift
+          if (diffMin > 120) {
+            return res.status(400).json({
+              error: 'upload_window_expired',
+              message: `This transaction occurred ${Math.round(diffMin)} minutes ago. Screenshots must be uploaded within 2 hours of payment.`
+            });
+          }
+        }
+      } else {
+        const todayIst = nowIst.toISOString().split('T')[0];
+        const diffDays = (new Date(todayIst) - new Date(dStr)) / (24 * 3600 * 1000);
+        if (diffDays >= 2 || (diffDays === 1 && nowIst.getUTCHours() >= 2)) {
+          return res.status(400).json({
+            error: 'upload_window_expired',
+            message: 'This transaction date is older than 2 hours. Screenshots must be uploaded within 2 hours of payment.'
+          });
+        }
+      }
+    }
+
       // 1. Global duplicate check: UPI UTR / Transaction Ref ID cannot be reused by anyone
       if (txnId?.trim()) {
         const dup = await sql`SELECT id FROM transactions WHERE txn_id=${txnId.trim()} LIMIT 1`;

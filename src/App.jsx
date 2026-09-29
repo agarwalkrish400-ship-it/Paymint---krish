@@ -3715,6 +3715,78 @@ function score_candidate(val, raw, line, li, total, hasSym, ctxB, ctxA, ambiguou
   return Math.max(sc, 0);
 }
 
+// ── Strict 2-Hour (120-minute) Window Verification ─────────────────────────────
+function checkTransactionWindow(dateStr, timeStr, fileModified) {
+  const now = new Date();
+
+  // Case 1: Both date and time are available
+  if (dateStr && timeStr) {
+    let txTime = new Date(`${dateStr}T${timeStr}:00`);
+    if (!isNaN(txTime.getTime())) {
+      let diffMin = (now.getTime() - txTime.getTime()) / (1000 * 60);
+
+      // AM/PM ambiguity correction: If time lacked AM/PM, it might be ~12 hours (720 min) off
+      if (diffMin > 600 && diffMin < 840) {
+        const altTime = new Date(txTime.getTime() + 12 * 60 * 60 * 1000);
+        const altDiff = (now.getTime() - altTime.getTime()) / (1000 * 60);
+        if (Math.abs(altDiff) <= 120) {
+          txTime = altTime;
+          diffMin = altDiff;
+        }
+      }
+
+      // Small clock drift tolerance (e.g. phone clock 1-15 mins ahead of system)
+      if (diffMin < 0 && diffMin >= -15) {
+        diffMin = 0;
+      }
+
+      if (diffMin > 120) {
+        return { expired: true, diffMin, reason: `${Math.round(diffMin)} minutes ago (limit: 120 min / 2 hours)` };
+      }
+      return { expired: false, diffMin, reason: 'within 120 min' };
+    }
+  }
+
+  // Case 2: Only date is available (no time)
+  if (dateStr && !timeStr) {
+    const todayStr = now.toISOString().split('T')[0];
+    const diffDays = (new Date(todayStr) - new Date(dateStr)) / (24 * 60 * 60 * 1000);
+    // If date is 2 or more days ago: definitely expired (> 24 hours)
+    if (diffDays >= 2) {
+      return { expired: true, diffMin: diffDays * 1440, reason: `Transaction date is ${diffDays} days old` };
+    }
+    // If date was yesterday and current hour >= 2 AM: definitely expired (> 2 hours)
+    if (diffDays === 1 && now.getHours() >= 2) {
+      return { expired: true, diffMin: 1440, reason: 'Transaction date is from yesterday' };
+    }
+    // Future date check
+    if (diffDays < -1) {
+      return { expired: true, diffMin: 0, reason: 'Invalid future date' };
+    }
+  }
+
+  // Case 3: Only time is available (no date)
+  if (!dateStr && timeStr) {
+    const todayStr = now.toISOString().split('T')[0];
+    let txTime = new Date(`${todayStr}T${timeStr}:00`);
+    let diffMin = (now.getTime() - txTime.getTime()) / (1000 * 60);
+    if (diffMin < 0 && diffMin >= -15) diffMin = 0;
+    if (diffMin > 120) {
+      return { expired: true, diffMin, reason: `${Math.round(diffMin)} minutes ago (limit: 120 min)` };
+    }
+  }
+
+  // Case 4: File lastModified check (if screenshot file metadata is > 135 minutes old)
+  if (fileModified && typeof fileModified === 'number') {
+    const fileAgeMin = (now.getTime() - fileModified) / (1000 * 60);
+    if (fileAgeMin > 135) {
+      return { expired: true, diffMin: fileAgeMin, reason: `Screenshot taken ${Math.round(fileAgeMin)} minutes ago` };
+    }
+  }
+
+  return { expired: false, diffMin: 0, reason: 'valid' };
+}
+
 function extractUPIData(text, log) {
   // Normalise: NFC compose, common rupee-symbol substitutes
   const t = text.normalize('NFC')
@@ -3969,6 +4041,14 @@ function BetaUpload({profile,onDone,onClose}){
   };
 
   const finaliseTx=async(parsed,file)=>{
+    // Strict 2-hour window check before finalizing
+    const winCheck = checkTransactionWindow(parsed.date, parsed.time, file?.lastModified);
+    if (winCheck.expired) {
+      log('EXPIRED in finaliseTx: ' + winCheck.reason);
+      setPhase('expired');
+      setSubmitting(false);
+      return;
+    }
     setSubmitting(true);
     const amount=parseFloat(Number(parsed.amount).toFixed(2));
     const coins =parseFloat((amount*0.10).toFixed(1));
@@ -4146,43 +4226,13 @@ function BetaUpload({profile,onDone,onClose}){
       return;
     }
 
-    // STEP 5b: 120-minute (2 hours) window check (lenient — skip if date/time not found)
-    if(extracted.date && extracted.time){
-      try{
-        let txTime=new Date(`${extracted.date}T${extracted.time}:00`);
-        if(!isNaN(txTime.getTime())){
-          let diffMin=(Date.now()-txTime.getTime())/(1000*60);
-          log('120-min check: tx at '+extracted.date+' '+extracted.time+', raw diff='+diffMin.toFixed(1)+'min');
-
-          // AM/PM ambiguity correction: If time lacked AM/PM, it might be ~12 hours (720 min) off
-          if(diffMin > 600 && diffMin < 840){
-            const altTime = new Date(txTime.getTime() + 12*60*60*1000);
-            const altDiff = (Date.now()-altTime.getTime())/(1000*60);
-            if(Math.abs(altDiff) <= 120){
-              log('Corrected 12h AM/PM offset: diff was '+diffMin.toFixed(1)+'min -> now '+altDiff.toFixed(1)+'min');
-              txTime = altTime;
-              diffMin = altDiff;
-            }
-          }
-
-          // Tolerance for small clock drift (e.g. phone clock 1-5 mins ahead of server)
-          if(diffMin < 0 && diffMin > -15){
-            diffMin = 0;
-          }
-
-          if(diffMin > 120){
-            log('EXPIRED: '+diffMin.toFixed(1)+' minutes since transaction (limit: 120 min / 2 hours)');
-            setPhase('expired');
-            return;
-          }
-        }else{
-          log('120-min check: invalid date/time format, skipping (lenient)');
-        }
-      }catch(e){
-        log('120-min check: parse error, skipping —',e.message);
-      }
-    }else{
-      log('120-min check: no date/time extracted, skipping (lenient mode)');
+        // STEP 5b: Strict 120-minute (2 hours) window check
+    const winCheck = checkTransactionWindow(extracted.date, extracted.time, file?.lastModified);
+    log(`120-min window check: date=${extracted.date||'none'} time=${extracted.time||'none'} expired=${winCheck.expired} (${winCheck.reason})`);
+    if(winCheck.expired){
+      log('EXPIRED: Transaction is older than 2 hours (' + winCheck.reason + ')');
+      setPhase('expired');
+      return;
     }
 
     // STEP 6: Route by confidence
@@ -4483,6 +4533,12 @@ function BetaUpload({profile,onDone,onClose}){
                     onClick={async()=>{
                       if(!review.amount||isNaN(Number(review.amount))||Number(review.amount)<=0){return;}
                       if(!review.merchant){return;}
+                      // Strict 2-hour window check on review confirmation
+                      const winCheck = checkTransactionWindow(review.date, review.time, savedFile.current?.lastModified);
+                      if (winCheck.expired) {
+                        setPhase('expired');
+                        return;
+                      }
                       await finaliseTx({
                         amount:   Number(review.amount),
                         merchant: review.merchant,
@@ -5643,6 +5699,15 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
 
   const handleTx=async(tx,ssUrl)=>{
     try {
+    // Strict 2-hour window check
+    if (tx.date || tx.time) {
+      const winCheck = checkTransactionWindow(tx.date, tx.time);
+      if (winCheck.expired) {
+        const msg = "Upload window expired. Transactions must be uploaded within 2 hours of payment.";
+        showNotif({ type: "error", title: "Window Expired", sub: msg });
+        return { error: true, message: msg };
+      }
+    }
     // Instant client-side duplicate check against current session transactions
     const localDup = txns.find(t => {
       if (tx.txnId && t.txn_id && t.txn_id.trim() === tx.txnId.trim()) return true;
