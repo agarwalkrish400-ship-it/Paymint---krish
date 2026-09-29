@@ -31,11 +31,11 @@ public class ReminderBroadcastReceiver extends BroadcastReceiver {
     private static final NotificationTemplate[] REMINDER_TEMPLATES = {
         new NotificationTemplate(
             "Kuchu puchu tum kaha ho...",
-            "Screenshot upload karna Bhul gaye ??"
+            "Screenshot upload karna Bhul gaye?"
         ),
         new NotificationTemplate(
             "Dost jaisa, screenshot waisa -",
-            "kabhi time pe nahi ??"
+            "kabhi time pe nahi!"
         )
     };
 

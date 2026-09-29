@@ -50,35 +50,35 @@ public class PaymentNotificationListener extends NotificationListenerService {
         }
     }
 
-    // 7 Clean Creative Rotational Templates (No extra amount / app noise)
+    // 7 Clean Creative Rotational Templates
     private static final NotificationTemplate[] ROTATING_TEMPLATES = {
         new NotificationTemplate(
             "Payment hogaya kuchu puchu...",
-            "Ab Screenshot bhi upload kardo ??"
+            "Ab Screenshot bhi upload kardo!"
         ),
         new NotificationTemplate(
             "Khula hain aao aake daldo...",
-            "Payment ka screenshot aur kya ??"
+            "Payment ka screenshot aur kya!"
         ),
         new NotificationTemplate(
             "Usne tumhe nahi Diya to kya hua hum dege tumhe... Rewards",
-            "Ek baar daalke to dekho ... Screenshot ??"
+            "Ek baar daalke to dekho ... Screenshot!"
         ),
         new NotificationTemplate(
             "Laal phool Neela phool,",
-            "Paymint tumhara rewardfull! ??"
+            "Paymint tumhara rewardfull!"
         ),
         new NotificationTemplate(
-            "Ek photo, ek reward. Deal? ????",
+            "Ek photo, ek reward. Deal?",
             "Tap karke screenshot upload karo!"
         ),
         new NotificationTemplate(
             "Screenshot naa bheja toh...",
-            "Reward bhi ghost kar dega ??"
+            "Reward bhi ghost kar dega!"
         ),
         new NotificationTemplate(
             "Paisa gaya...",
-            "Ab reward bhi jaane doge? (nahi na?) ??"
+            "Ab reward bhi jaane doge? (nahi na?)"
         )
     };
 
