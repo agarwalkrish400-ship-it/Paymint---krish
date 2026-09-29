@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-﻿import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogoBadge, RewardStoreView, FounderRewardsTab } from "./RewardsSystem";
 
