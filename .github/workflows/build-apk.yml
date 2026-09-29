@@ -46,11 +46,10 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace || (echo "=== GRADLE STACKTRACE FAILED ===" && ./gradlew assembleDebug --no-daemon --info)
-          echo "=== SEARCHING FOR GENERATED APKS ==="
-          find . -name "*.apk"
+          ./gradlew assembleDebug --no-daemon --stacktrace
           mkdir -p ../dist-apk
-          find . -name "*.apk" -exec cp {} ../dist-apk/ \;
+          find app/build/outputs/ -name "*.apk" -exec cp {} ../dist-apk/ \;
+          echo "=== COPIED APKS ==="
           ls -la ../dist-apk/
 
       - name: Upload APK Artifact
@@ -58,4 +57,4 @@ jobs:
         with:
           name: Paymint-Beta-APK
           path: dist-apk/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error
