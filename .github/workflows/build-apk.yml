@@ -43,30 +43,16 @@ jobs:
         run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Build Android APK
-        id: gradle_build
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../build.log
-          mkdir -p ../dist-apk
-          find app/build/outputs/ -name "*.apk" -exec cp {} ../dist-apk/ \;
-        continue-on-error: true
-
-      - name: Upload Build Log
-        uses: actions/upload-artifact@v4
-        with:
-          name: Build-Log
-          path: build.log
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          echo "=== LISTING OUTPUT DIRECTORY ==="
+          find app/build/outputs/ -type f
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Paymint-Beta-APK
-          path: dist-apk/*.apk
-
-      - name: Check Build Status
-        if: steps.gradle_build.outcome != 'success'
-        run: |
-          echo "=== BUILD FAILED - RECENT LOGS ==="
-          tail -n 150 build.log
-          exit 1
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
