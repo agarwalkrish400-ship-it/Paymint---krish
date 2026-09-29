@@ -2765,44 +2765,48 @@ async function apiFetch(path, opts={}) {
     ...(opts.founderPw ? { 'x-founder-password': opts.founderPw } : {}),
     ...(opts.headers || {}),
   };
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const targetApi = isLocal ? FALLBACK_API : API;
+
   try {
-    const res = await fetch(API + path, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), opts.timeout || 7000);
+    
+    let res = await fetch(targetApi + path, {
       method:  opts.method || 'GET',
       headers,
+      signal: controller.signal,
       ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
-    });
-    const data = await res.json().catch(() => ({}));
+    }).catch(() => null);
     
-    // Auto-fallback if the current domain does not have DATABASE_URL attached
-    if (!res.ok && (res.status === 500 || res.status === 404 || (data?.error && data.error.includes('DATABASE_URL')))) {
-      if (typeof window !== 'undefined' && !window.location.hostname.includes('paymint-krish2')) {
+    clearTimeout(timeoutId);
+
+    const isHtml = res?.headers?.get('content-type')?.includes('text/html');
+    
+    if (!res || !res.ok || isHtml) {
+      if (typeof window !== 'undefined' && !window.location.hostname.includes('paymint-krish2') && targetApi !== FALLBACK_API) {
         try {
+          const fbController = new AbortController();
+          const fbTimeout = setTimeout(() => fbController.abort(), 7000);
           const fallbackRes = await fetch(FALLBACK_API + path, {
             method: opts.method || 'GET',
             headers,
+            signal: fbController.signal,
             ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
           });
+          clearTimeout(fbTimeout);
           const fallbackData = await fallbackRes.json().catch(() => ({}));
           if (fallbackRes.ok) return fallbackData;
         } catch (err) {}
       }
     }
 
-    if (!res.ok) return { __apiError: true, status: res.status, message: data.error || 'Unknown error', data };
+    if (!res) return { __apiError: true, status: 0, message: 'Network timeout' };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { __apiError: true, status: res.status, message: data?.error || 'Unknown error', data };
     return data;
   } catch (e) {
     console.error('[API]', path, e.message);
-    if (typeof window !== 'undefined' && !window.location.hostname.includes('paymint-krish2')) {
-      try {
-        const fallbackRes = await fetch(FALLBACK_API + path, {
-          method: opts.method || 'GET',
-          headers,
-          ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
-        });
-        const fallbackData = await fallbackRes.json().catch(() => ({}));
-        if (fallbackRes.ok) return fallbackData;
-      } catch(fbErr){}
-    }
     return { __apiError: true, status: 0, message: e.message };
   }
 }
@@ -2908,25 +2912,25 @@ async function apiAdminOverview(pw) {
 
 async function apiAdminUsers(pw) {
   const r = await apiFetch('/api/admin/users', { founderPw: pw });
-  if (isErr(r)) return [];
+  if (isErr(r) || !Array.isArray(r)) return [];
   return r;
 }
 
 async function apiAdminTxns(pw) {
   const r = await apiFetch('/api/admin/transactions', { founderPw: pw });
-  if (isErr(r)) return [];
+  if (isErr(r) || !Array.isArray(r)) return [];
   return r;
 }
 
 async function apiAdminRedemptions(pw) {
   const r = await apiFetch('/api/admin/redemptions', { founderPw: pw });
-  if (isErr(r)) return [];
+  if (isErr(r) || !Array.isArray(r)) return [];
   return r;
 }
 
 async function apiAdminGetRewards(pw) {
   const r = await apiFetch('/api/rewards', { founderPw: pw });
-  if (isErr(r)) return [];
+  if (isErr(r) || !Array.isArray(r)) return [];
   return r;
 }
 
@@ -4156,7 +4160,7 @@ function extractUPIData(text, log) {
 }
 
 
-function BetaUpload({profile,onDone,onClose}){
+function BetaUpload({profile,onDone,onClose,onAddDetails}){
   const [phase,     setPhase]     = useState('idle');
   const [result,    setResult]    = useState(null);
   const [errMsg,    setErrMsg]    = useState('');
@@ -4235,7 +4239,8 @@ function BetaUpload({profile,onDone,onClose}){
       return;
     }
 
-    setResult(tx);
+    const finalTx = { ...tx, id: res?.transaction?.id || tx.id };
+    setResult(finalTx);
     setReviewing(false);
     setPhase('success');
   };
@@ -4504,41 +4509,97 @@ function BetaUpload({profile,onDone,onClose}){
 
             {phase==="success"&&result&&(
               <motion.div key="succ" initial={{opacity:0,scale:0.9}} animate={{opacity:1,scale:1}}
-                exit={{opacity:0}} transition={{...SP.bouncy}} style={{padding:"10px 0"}}>
-                <div style={{textAlign:"center",marginBottom:20}}>
+                exit={{opacity:0}} transition={{...SP.bouncy}} style={{padding:"6px 0 14px"}}>
+                <div style={{textAlign:"center",marginBottom:16}}>
                   <motion.div initial={{scale:0}} animate={{scale:1}} transition={{delay:0.1,...SP.bouncy}}
-                    style={{width:62,height:62,borderRadius:"50%",
+                    style={{width:56,height:56,borderRadius:"50%",
                       background:`linear-gradient(145deg,${T.blue},${T.blueDeep})`,
                       display:"flex",alignItems:"center",justifyContent:"center",
-                      margin:"0 auto 14px",boxShadow:"0 0 40px rgba(74,158,255,0.45)"}}>
-                    <svg width="26" height="20" viewBox="0 0 26 20" fill="none">
+                      margin:"0 auto 12px",boxShadow:"0 0 35px rgba(74,158,255,0.45)"}}>
+                    <svg width="24" height="18" viewBox="0 0 26 20" fill="none">
                       <path d="M2 10L8.5 17L24 2" stroke="white" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </motion.div>
-                  <h3 style={{margin:"0 0 4px",fontSize:19,fontWeight:800,color:T.text}}>Transaction Verified</h3>
-                  <p style={{margin:"0 0 14px",fontSize:13.5,color:T.textSub}}>{result.merchant} · ₹{fmt(result.amount)}</p>
-                  <div style={{background:"rgba(232,196,106,0.1)",border:"1px solid rgba(232,196,106,0.25)",
-                    borderRadius:16,padding:"14px",marginBottom:18}}>
-                    <p style={{margin:0,fontSize:30,fontWeight:800,color:T.gold,letterSpacing:"-0.04em"}}>+{result.coins} Coins</p>
-                    <p style={{margin:"3px 0 0",fontSize:12,color:T.textMute}}>10% of ₹{fmt(result.amount)}</p>
+                  <h3 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:T.text}}>Transaction Verified</h3>
+                  <p style={{margin:"0 0 12px",fontSize:13,color:T.textSub}}>{result.merchant} · ₹{fmt(result.amount)}</p>
+                  
+                  {/* Base Coins Awarded */}
+                  <div style={{background:"rgba(232,196,106,0.08)",border:"1px solid rgba(232,196,106,0.25)",
+                    borderRadius:14,padding:"10px 14px",marginBottom:12}}>
+                    <p style={{margin:0,fontSize:26,fontWeight:800,color:T.gold,letterSpacing:"-0.03em"}}>+{result.coins} Coins Credited</p>
+                    <p style={{margin:"2px 0 0",fontSize:11.5,color:"rgba(232,196,106,0.7)"}}>10% Base Reward on ₹{fmt(result.amount)}</p>
                   </div>
-                  {/* Details */}
-                  <div style={{textAlign:"left",background:T.glass,borderRadius:14,padding:"12px 14px",marginBottom:18}}>
+
+                  {/* Bonus +5% Card Trigger */}
+                  <motion.div whileTap={{scale:0.98}}
+                    onClick={()=>{
+                      if(onAddDetails) {
+                        onAddDetails(result.id || result.txnId, result);
+                      } else {
+                        onClose();
+                      }
+                    }}
+                    style={{
+                      background:"linear-gradient(135deg, rgba(232,196,106,0.2) 0%, rgba(200,140,20,0.12) 100%)",
+                      border:"1.5px solid rgba(232,196,106,0.45)",
+                      borderRadius:16,padding:"12px 14px",marginBottom:14,cursor:"pointer",
+                      boxShadow:"0 4px 20px rgba(232,196,106,0.12)",textAlign:"left",
+                      display:"flex",alignItems:"center",gap:12
+                    }}>
+                    <div style={{width:38,height:38,borderRadius:10,background:"rgba(232,196,106,0.22)",
+                      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>
+                      🎁
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:13.5,fontWeight:800,color:"#FFF"}}>Claim +5% Extra Bonus</span>
+                        <span style={{fontSize:10,fontWeight:800,background:"#E8C46A",color:"#000",padding:"1px 6px",borderRadius:6}}>
+                          +${(Number(result.amount)*0.05).toFixed(1)} COINS
+                        </span>
+                      </div>
+                      <p style={{margin:"2px 0 0",fontSize:11,color:"rgba(242,242,247,0.75)"}}>
+                        Add what you bought & platform used
+                      </p>
+                    </div>
+                    <span style={{fontSize:16,color:T.gold}}>➔</span>
+                  </motion.div>
+
+                  {/* Details summary */}
+                  <div style={{textAlign:"left",background:T.glass,borderRadius:12,padding:"9px 12px",marginBottom:14}}>
                     {[
                       ["Merchant",result.merchant],
                       ["Amount",`₹${fmt(result.amount)}`],
                       ["App",result.app||"UPI"],
                       result.txnId?["Ref ID",result.txnId]:null,
                     ].filter(Boolean).map(([k,v])=>(
-                      <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",
                         borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
-                        <p style={{margin:0,fontSize:12,color:T.textMute}}>{k}</p>
-                        <p style={{margin:0,fontSize:12,fontWeight:600,color:T.text}}>{v}</p>
+                        <p style={{margin:0,fontSize:11.5,color:T.textMute}}>{k}</p>
+                        <p style={{margin:0,fontSize:11.5,fontWeight:600,color:T.text}}>{v}</p>
                       </div>
                     ))}
                   </div>
                 </div>
-                <Btn onClick={onClose} full large>Done</Btn>
+
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <motion.button whileTap={{scale:0.96}}
+                    onClick={()=>{
+                      if(onAddDetails) {
+                        onAddDetails(result.id || result.txnId, result);
+                      } else {
+                        onClose();
+                      }
+                    }}
+                    style={{width:"100%",padding:"13px",borderRadius:100,border:"none",
+                      background:`linear-gradient(135deg, ${T.gold}, #D4A017)`,
+                      color:"#000",fontSize:14,fontWeight:800,fontFamily:"inherit",
+                      cursor:"pointer",boxShadow:"0 4px 18px rgba(232,196,106,0.35)",
+                      display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                    <span>Add Purchase Details (+5% Bonus)</span>
+                    <span>➔</span>
+                  </motion.button>
+                  <Btn onClick={onClose} variant="ghost" full>Done / Do Later</Btn>
+                </div>
                 {debugLog.length>0&&(
                   <motion.button onClick={()=>setShowDebug(d=>!d)}
                     style={{width:"100%",background:"none",border:"none",cursor:"pointer",
@@ -4777,6 +4838,34 @@ function BetaUpload({profile,onDone,onClose}){
 // ══════════════════════════════════════════════════════════════════════════════
 // FOUNDER DASHBOARD
 // ══════════════════════════════════════════════════════════════════════════════
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("[ErrorBoundary caught]", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{position:"absolute",inset:0,zIndex:250,background:"#0A0A0C",padding:24,display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",textAlign:"center"}}>
+          <p style={{color:"#FF6058",fontSize:18,fontWeight:800,marginBottom:8}}>Dashboard Error</p>
+          <p style={{color:"rgba(242,242,247,0.6)",fontSize:13,marginBottom:20,maxWidth:300}}>{this.state.error?.message || "An unexpected error occurred."}</p>
+          <button onClick={() => { this.setState({ hasError: false }); this.props.onClose?.(); }}
+            style={{padding:"10px 20px",borderRadius:12,background:"rgba(74,158,255,0.2)",border:"1px solid #4A9EFF",color:"#4A9EFF",fontWeight:700,fontSize:14,cursor:"pointer"}}>
+            Back to App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function FounderDashboard({onClose, founderPw}){
   const [tab,setTab]=useState("overview");
   const [data,setData]=useState({users:[],txns:[],redemptions:[]});
@@ -4806,20 +4895,26 @@ function FounderDashboard({onClose, founderPw}){
   const [showScriptHelp,setShowScriptHelp]=useState(false);
 
   useEffect(()=>{
+    let active = true;
+    const fallbackTimer = setTimeout(() => {
+      if (active) setLoading(false);
+    }, 4500);
+
     (async()=>{
       setLoading(true);
       setActionMsg("");
       try {
-        if (!founderPw) { setLoading(false); return; } // wait for password prop
+        if (!founderPw) { if(active) setLoading(false); return; }
         const [overview, allUsers, txns, redemptions, rw] = await Promise.all([
-          apiAdminOverview(founderPw),
-          apiAdminUsers(founderPw),
-          apiAdminTxns(founderPw),
-          apiAdminRedemptions(founderPw),
-          apiAdminGetRewards(founderPw),
+          apiAdminOverview(founderPw).catch(() => ({})),
+          apiAdminUsers(founderPw).catch(() => []),
+          apiAdminTxns(founderPw).catch(() => []),
+          apiAdminRedemptions(founderPw).catch(() => []),
+          apiAdminGetRewards(founderPw).catch(() => []),
         ]);
+        if (!active) return;
         setData({
-          overview: overview || {},
+          overview: (overview && typeof overview === 'object' && !isErr(overview)) ? overview : {},
           users: Array.isArray(allUsers) ? allUsers : [],
           txns: Array.isArray(txns) ? txns : [],
           redemptions: Array.isArray(redemptions) ? redemptions : []
@@ -4827,11 +4922,13 @@ function FounderDashboard({onClose, founderPw}){
         setRewards(Array.isArray(rw) ? rw : []);
       } catch(err) {
         console.error('[Founder] Load failed:', err.message);
-        setActionMsg("Failed to load dashboard data. Pull to refresh.");
+        if (active) setActionMsg("Failed to load dashboard data. Pull to refresh.");
       } finally {
-        setLoading(false);
+        clearTimeout(fallbackTimer);
+        if (active) setLoading(false);
       }
     })();
+    return () => { active = false; clearTimeout(fallbackTimer); };
   },[refreshKey, founderPw]);
 
   const refresh=()=>setRefreshKey(k=>k+1);
@@ -5983,17 +6080,17 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
     if(lb && lb.length > 0){ setLeaderboard(lb); await lc.set("beta-leaderboard", lb); }
 
     // 7. Notification
-    showNotif({ type:"earn", title:"Transaction Verified",
+    showNotif({ type:"earn", title:"Transaction Verified (+10%)",
       sub:`+${serverCoins} Coins · ${tx.merchant}`, coins:serverCoins });
-    return { ok: true, transaction: newTx };
 
     // 8. Purchase prompt — triggers instant popup for +5% bonus coins
     const insertedId = apiResult?.transaction?.id || newTx.id;
     const expiresAt  = new Date(Date.now() + 60*60*1000).toISOString(); // 1 hour window
-    const bonusAmt   = parseFloat((tx.amount * 0.05).toFixed(1)); // 5% of payment amount (matches backend)
+    const bonusAmt   = parseFloat((Number(tx.amount) * 0.05).toFixed(1)); // 5% of payment amount (matches backend)
 
     setBonusPendingTxIds(prev=>({...prev, [insertedId]: bonusAmt}));
     setPurchasePendingTxIds(prev=>({...prev, [insertedId]: expiresAt}));
+    setPurchasePromptTxId(insertedId);
 
     // Expire after 1 hour
     setTimeout(()=>{
@@ -6001,8 +6098,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
       setPurchasePendingTxIds(prev=>{const n={...prev};delete n[insertedId];return n;});
     }, 60*60*1000);
 
-    // Prompt user with pop-up right away for easy +5% bonus coins
-    setTimeout(()=>{ setPurchaseInputTxId(insertedId); }, 700);
+    return { ok: true, transaction: newTx };
     } catch(err) {
       console.error("[handleTx]", err.message);
       showNotif({type:"error", title:"Error", sub:"Could not save transaction. Please try again."});
@@ -6088,7 +6184,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
       {/* Founder dashboard */}
       <AnimatePresence>
         {founderOpen&&(
-          <FounderDashboard key="founder" onClose={()=>setFounderOpen(false)} founderPw={founderPw}/>
+          <ErrorBoundary onClose={()=>setFounderOpen(false)}><FounderDashboard key="founder" onClose={()=>setFounderOpen(false)} founderPw={founderPw}/></ErrorBoundary>
         )}
       </AnimatePresence>
 
@@ -6145,117 +6241,175 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
               flexDirection:"column",justifyContent:"flex-end",boxSizing:"border-box"}}>
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
               onClick={()=>{setPurchaseInputTxId(null);setPurchaseNote("");}}
-              style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}/>
+              style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.82)",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)"}}/>
             <motion.div style={{position:"relative",zIndex:2,background:"#0D0D12",
-              borderRadius:"24px 24px 0 0",border:"1px solid rgba(255,255,255,0.12)",
-              maxHeight:"90vh",overflowY:"auto",boxSizing:"border-box",paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 24px)"}}>
+              borderRadius:"24px 24px 0 0",border:"1px solid rgba(255,255,255,0.14)",
+              maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 28px)"}}>
               <div style={{display:"flex",justifyContent:"center",paddingTop:12,paddingBottom:4}}>
-                <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.18)"}}/>
+                <div style={{width:40,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)"}}/>
               </div>
               <div style={{padding:"10px 20px 20px"}}>
                 {(()=>{
-                  const bonAmt=bonusPendingTxIds[purchaseInputTxId];
-                  const isEdit=!!txns.find(t=>t.id===purchaseInputTxId)?.purchase_note;
+                  const currentTx = txns.find(t=>t.id===purchaseInputTxId);
+                  const bonAmt = bonusPendingTxIds[purchaseInputTxId] || (currentTx?.amount ? parseFloat((Number(currentTx.amount)*0.05).toFixed(1)) : null);
+                  const isEdit = !!currentTx?.purchase_note;
                   return(<>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                      <h3 style={{margin:0,fontSize:18,fontWeight:800,color:"#F2F2F7"}}>
-                        {isEdit?"Edit Purchase Details":"What & Where Did You Spend?"}
-                      </h3>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:32,height:32,borderRadius:9,background:"rgba(232,196,106,0.18)",
+                          display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
+                          🎁
+                        </div>
+                        <div>
+                          <h3 style={{margin:0,fontSize:17,fontWeight:800,color:"#F2F2F7"}}>
+                            {isEdit ? "Edit Purchase Details" : "Add Purchase Details"}
+                          </h3>
+                          {currentTx && <p style={{margin:0,fontSize:11.5,color:T.textSub}}>
+                            {currentTx.merchant} · ₹{fmt(currentTx.amount)}
+                          </p>}
+                        </div>
+                      </div>
                       <button onClick={()=>{setPurchaseInputTxId(null);setPurchaseNote("");}}
-                        style={{background:"none",border:"none",color:T.textMute,fontSize:18,cursor:"pointer",padding:"4px"}}>
+                        style={{background:"rgba(255,255,255,0.06)",border:"none",borderRadius:"50%",width:28,height:28,color:T.textMute,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
                         ✕
                       </button>
                     </div>
 
                     {bonAmt&&!isEdit?(
                       <motion.div initial={{opacity:0,y:4}} animate={{opacity:1,y:0}}
-                        style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,
-                          padding:"8px 12px",borderRadius:12,
-                          background:"rgba(232,196,106,0.12)",
-                          border:"1px solid rgba(232,196,106,0.3)"}}>
-                        <motion.div animate={{scale:[1,1.4,1]}} transition={{duration:1,repeat:Infinity}}
-                          style={{width:7,height:7,borderRadius:"50%",background:"#E8C46A",flexShrink:0}}/>
-                        <p style={{margin:0,fontSize:12,fontWeight:700,color:"#E8C46A"}}>
-                          +5% Extra Coins Bonus: Earn +{bonAmt} coins instantly
-                        </p>
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,
+                          padding:"9px 12px",borderRadius:14,
+                          background:"linear-gradient(135deg, rgba(232,196,106,0.16), rgba(200,140,20,0.08))",
+                          border:"1px solid rgba(232,196,106,0.35)"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <motion.div animate={{scale:[1,1.3,1]}} transition={{duration:1.2,repeat:Infinity}}
+                            style={{width:8,height:8,borderRadius:"50%",background:"#E8C46A",flexShrink:0}}/>
+                          <p style={{margin:0,fontSize:12.5,fontWeight:700,color:"#E8C46A"}}>
+                            Unlock +5% Extra Coins on this purchase
+                          </p>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:800,background:"#E8C46A",color:"#000",padding:"2px 8px",borderRadius:10}}>
+                          +{bonAmt} COINS
+                        </span>
                       </motion.div>
                     ):(
                       <p style={{margin:"0 0 12px",fontSize:12,color:T.textMute,lineHeight:1.4}}>
-                        Provide expense details to unlock your +5% bonus coins.
+                        Provide expense details to enrich your transaction history.
                       </p>
                     )}
                   </>);
                 })()}
 
-                {/* 1. What was this expense for? */}
-                <p style={{margin:"0 0 6px",fontSize:11.5,fontWeight:700,color:T.blue,letterSpacing:"0.03em",textTransform:"uppercase"}}>
-                  1. What was this expense for?
-                </p>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  {["🍕 Food & Dining","🛒 Groceries","🛍️ Shopping","☕ Coffee","🚕 Travel & Cab","🎬 Movies & Fun","📱 Bills & Recharge","💊 Pharmacy"].map(tag=>(
-                    <motion.button key={tag} whileTap={{scale:0.94}}
-                      onClick={()=>{
-                        const cleanTag = tag.replace(/^[^\w\s]+/, '').trim();
-                        setPurchaseNote(prev=>{
-                          if(!prev) return `What: ${cleanTag}`;
-                          if(prev.includes("What:")) return prev.replace(/What:[^·]+/, `What: ${cleanTag} `);
-                          return `What: ${cleanTag} · ${prev}`;
-                        });
-                      }}
-                      style={{padding:"5px 10px",borderRadius:16,
-                        background:"rgba(74,158,255,0.08)",border:"1px solid rgba(74,158,255,0.22)",
-                        color:"#80C4FF",fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                      {tag}
-                    </motion.button>
-                  ))}
+                {/* 1. Category / Item Tags */}
+                <div style={{marginBottom:14}}>
+                  <p style={{margin:"0 0 6px",fontSize:11.5,fontWeight:700,color:T.blue,letterSpacing:"0.03em",textTransform:"uppercase"}}>
+                    1. What did you buy?
+                  </p>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                    {[
+                      "🍕 Food & Dining", "🛒 Groceries", "🛍️ Shopping",
+                      "☕ Coffee / Snacks", "🚕 Cab & Travel", "📱 Bills & Recharge",
+                      "🎬 Movies & Fun", "💊 Pharmacy", "⚡ Electronics", "📦 Other"
+                    ].map(tag=>(
+                      <motion.button key={tag} whileTap={{scale:0.94}}
+                        onClick={()=>{
+                          const cleanTag = tag.replace(/^[^\w\s/]+/, "").trim();
+                          setPurchaseNote(prev=>{
+                            const parts = prev ? prev.split(" · ") : [];
+                            const otherParts = parts.filter(p => !p.startsWith("Item:") && !p.startsWith("What:") && !p.startsWith("Category:"));
+                            return [`Category: ${cleanTag}`, ...otherParts].join(" · ");
+                          });
+                        }}
+                        style={{padding:"5px 10px",borderRadius:16,
+                          background:"rgba(74,158,255,0.08)",border:"1px solid rgba(74,158,255,0.22)",
+                          color:"#80C4FF",fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                        {tag}
+                      </motion.button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* 2. Where was it spent? */}
-                <p style={{margin:"0 0 6px",fontSize:11.5,fontWeight:700,color:T.gold,letterSpacing:"0.03em",textTransform:"uppercase"}}>
-                  2. Where was it spent?
-                </p>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  {["Swiggy","Zomato","Blinkit","Zepto","Amazon","Flipkart","Starbucks","Uber","Local Store","Online"].map(wh=>(
-                    <motion.button key={wh} whileTap={{scale:0.94}}
-                      onClick={()=>{
-                        setPurchaseNote(prev=>{
-                          if(!prev) return `Where: ${wh}`;
-                          if(prev.includes("Where:")) return prev.replace(/Where:.+$/, `Where: ${wh}`);
-                          return `${prev} · Where: ${wh}`;
-                        });
-                      }}
-                      style={{padding:"5px 10px",borderRadius:16,
-                        background:"rgba(232,196,106,0.08)",border:"1px solid rgba(232,196,106,0.22)",
-                        color:T.gold,fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                      {wh}
-                    </motion.button>
-                  ))}
+                {/* 2. Platform or Store used */}
+                <div style={{marginBottom:14}}>
+                  <p style={{margin:"0 0 6px",fontSize:11.5,fontWeight:700,color:T.gold,letterSpacing:"0.03em",textTransform:"uppercase"}}>
+                    2. Platform / Store used
+                  </p>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                    {["Swiggy","Zomato","Blinkit","Zepto","Instamart","Amazon","Flipkart","Uber","Ola","Offline Store","Myntra","BookMyShow"].map(wh=>(
+                      <motion.button key={wh} whileTap={{scale:0.94}}
+                        onClick={()=>{
+                          setPurchaseNote(prev=>{
+                            const parts = prev ? prev.split(" · ") : [];
+                            const otherParts = parts.filter(p => !p.startsWith("Platform:") && !p.startsWith("Where:"));
+                            return [...otherParts, `Platform: ${wh}`].join(" · ");
+                          });
+                        }}
+                        style={{padding:"5px 10px",borderRadius:16,
+                          background:"rgba(232,196,106,0.08)",border:"1px solid rgba(232,196,106,0.22)",
+                          color:T.gold,fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                        {wh}
+                      </motion.button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Note / Edit Field */}
-                <input value={purchaseNote} onChange={e=>setPurchaseNote(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&handleSavePurchase()}
-                  placeholder="e.g. What: Groceries · Where: Blinkit"
-                  style={{width:"100%",padding:"12px 14px",borderRadius:12,
-                    border:`1px solid ${purchaseNote.trim()?T.blue:T.glassBorder}`,
-                    background:"rgba(255,255,255,0.05)",color:"#F2F2F7",fontSize:16,
-                    fontFamily:"inherit",outline:"none",caretColor:T.blue,
-                    boxSizing:"border-box",marginBottom:14}}/>
+                {/* 3. Expense Context */}
+                <div style={{marginBottom:14}}>
+                  <p style={{margin:"0 0 6px",fontSize:11.5,fontWeight:700,color:"#68D391",letterSpacing:"0.03em",textTransform:"uppercase"}}>
+                    3. Expense Purpose
+                  </p>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {["👤 Personal","👥 Shared / Friends","💼 Work / Office","🏠 Household"].map(ctx=>(
+                      <motion.button key={ctx} whileTap={{scale:0.94}}
+                        onClick={()=>{
+                          const cleanCtx = ctx.replace(/^[^\w\s/]+/, "").trim();
+                          setPurchaseNote(prev=>{
+                            const parts = prev ? prev.split(" · ") : [];
+                            const otherParts = parts.filter(p => !p.startsWith("Type:") && !p.startsWith("Purpose:"));
+                            return [...otherParts, `Type: ${cleanCtx}`].join(" · ");
+                          });
+                        }}
+                        style={{padding:"5px 10px",borderRadius:16,
+                          background:"rgba(104,211,145,0.08)",border:"1px solid rgba(104,211,145,0.22)",
+                          color:"#68D391",fontSize:11.5,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                        {ctx}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
 
+                {/* Purchase Note Edit Field */}
+                <div style={{marginBottom:14}}>
+                  <p style={{margin:"0 0 5px",fontSize:11,color:T.textMute,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>
+                    Purchase Description / Note
+                  </p>
+                  <input value={purchaseNote} onChange={e=>setPurchaseNote(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&handleSavePurchase()}
+                    placeholder="e.g. Category: Food · Platform: Swiggy · Type: Personal"
+                    style={{width:"100%",padding:"12px 14px",borderRadius:12,
+                      border:`1px solid ${purchaseNote.trim()?T.blue:T.glassBorder}`,
+                      background:"rgba(255,255,255,0.05)",color:"#F2F2F7",fontSize:14,
+                      fontFamily:"inherit",outline:"none",caretColor:T.blue,
+                      boxSizing:"border-box"}}/>
+                </div>
+
+                {/* CTA Submit Button */}
                 <motion.button disabled={!purchaseNote.trim()||savingNote}
                   onClick={handleSavePurchase}
                   whileTap={purchaseNote.trim()&&!savingNote?{scale:0.97}:{}}
                   style={{width:"100%",padding:"13px",borderRadius:14,border:"none",
                     cursor:purchaseNote.trim()&&!savingNote?"pointer":"not-allowed",
                     background:purchaseNote.trim()
-                      ?`linear-gradient(135deg,${T.blue},${T.blueDeep})`
-                      :"rgba(255,255,255,0.08)",
-                    color:purchaseNote.trim()?"white":"rgba(255,255,255,0.3)",
-                    fontSize:14,fontWeight:700,fontFamily:"inherit",
-                    boxShadow:purchaseNote.trim()?"0 4px 18px rgba(74,158,255,0.35)":"none"}}>
-                  {savingNote?"Saving…":(()=>{
-                    const b=bonusPendingTxIds[purchaseInputTxId];
-                    return b?`Claim +${b} Extra Coins (5%) →`:"Save Purchase Details";
+                      ? `linear-gradient(135deg, ${T.gold}, #D4A017)`
+                      : "rgba(255,255,255,0.08)",
+                    color:purchaseNote.trim() ? "#000" : "rgba(255,255,255,0.3)",
+                    fontSize:14.5,fontWeight:800,fontFamily:"inherit",
+                    boxShadow:purchaseNote.trim() ? "0 4px 18px rgba(232,196,106,0.35)" : "none",
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  {savingNote ? "Saving details…" : (()=>{
+                    const currentTx = txns.find(t=>t.id===purchaseInputTxId);
+                    const b = bonusPendingTxIds[purchaseInputTxId] || (currentTx?.amount ? parseFloat((Number(currentTx.amount)*0.05).toFixed(1)) : null);
+                    return b ? `Claim +${b} Extra Coins (5%) →` : "Save Purchase Details";
                   })()}
                 </motion.button>
               </div>
@@ -6263,8 +6417,8 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Dynamic Island Notif */}
+      
+{/* Dynamic Island Notif */}
       <AnimatePresence>
         {notif&&(
           <motion.div key={notif.title+notif.sub}
@@ -6689,7 +6843,7 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
       {/* UPLOAD */}
       <AnimatePresence>
         {uploadOpen&&(
-          <BetaUpload key="upload" profile={profile} onDone={handleTx} onClose={()=>setUploadOpen(false)}/>
+          <BetaUpload key="upload" profile={profile} onDone={handleTx} onClose={()=>setUploadOpen(false)} onAddDetails={(txId)=>{ setUploadOpen(false); setPurchasePromptTxId(null); setPurchaseInputTxId(txId); setPurchaseNote(""); }}/>
         )}
       </AnimatePresence>
 
@@ -7790,11 +7944,7 @@ export default function Paymint(){
       {/* ── GLOBAL FOUNDER DASHBOARD ── */}
       <AnimatePresence>
         {founderOpen && (
-          <FounderDashboard
-            key="founder"
-            onClose={() => setFounderOpen(false)}
-            founderPw={founderPw}
-          />
+          <ErrorBoundary onClose={()=>setFounderOpen(false)}><FounderDashboard key="founder" onClose={()=>setFounderOpen(false)} founderPw={founderPw}/></ErrorBoundary>
         )}
       </AnimatePresence>
     </div>
