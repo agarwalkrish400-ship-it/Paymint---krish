@@ -16,6 +16,21 @@ export default async function handler(req, res) {
     const amt = parseFloat(amount);
     if (!amt || isNaN(amt) || amt <= 0 || amt > 500000) return res.status(400).json({ error: 'Invalid amount: ' + amount });
     if (!merchant?.trim()) return res.status(400).json({ error: 'Merchant name required' });
+    // Reject received / incoming payments (coins only earned for payments made to someone)
+    const lowerMerchant = (merchant || '').toLowerCase();
+    if (
+      lowerMerchant.includes('received from') ||
+      lowerMerchant.includes('payment received') ||
+      lowerMerchant.includes('money received') ||
+      lowerMerchant.includes('cashback received') ||
+      lowerMerchant.includes('refund received')
+    ) {
+      return res.status(400).json({
+        error: 'received_payment_ineligible',
+        message: 'Coins are only credited for payments made to merchants or individuals. Received payments are not eligible for coins.'
+      });
+    }
+
     const baseCoins = parseFloat((amt * 0.10).toFixed(1));
     try {
     // 0. Strict 2-hour (120-minute) window check on backend (IST UTC+5:30)

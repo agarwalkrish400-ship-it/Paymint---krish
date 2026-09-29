@@ -3715,6 +3715,52 @@ function score_candidate(val, raw, line, li, total, hasSym, ctxB, ctxA, ambiguou
   return Math.max(sc, 0);
 }
 
+// ── Payment Direction Detection (Outgoing / Paid vs Incoming / Received) ─────
+function detectPaymentDirection(text) {
+  const t = text.toLowerCase();
+
+  // Definitive Incoming (NEVER appears on genuine outgoing payment receipts)
+  const definitiveIncoming = /(?:received\s+from|payment\s+received|money\s+received|you(?:\s*have)?\s+received|received\s*(?:₹|rs\.?|inr)|amount\s+received|funds?\s+received|received\s+into|received\s+in\s+bank|sender\s*:|remitter\s*(?:name|upi|vpa)?\s*:?|inward\s+(?:upi|payment|transaction|remittance)|cashback\s+(?:received|credited)|refund\s+(?:received|credited|from)|credited\s+to\s+your\s+(?:account|bank|wallet|a\/c)|your\s+account\s+has\s+been\s+credited)/i;
+
+  const mDef = text.match(definitiveIncoming);
+  if (mDef) {
+    return { direction: 'incoming', isReceived: true, match: mDef[0] };
+  }
+
+  // General Incoming checks
+  const incomingPatterns = [
+    /\bcredited\b/i,
+    /\bcredit\s+alert\b/i,
+    /\bdeposit\s+successful\b/i,
+  ];
+
+  // Outgoing checks
+  const outgoingPatterns = [
+    /\bpaid\s+to\b/i,
+    /\bpayment\s+to\b/i,
+    /\bsent\s+to\b/i,
+    /\bmoney\s+sent\b/i,
+    /\btransferred\s+to\b/i,
+    /\bpaying\s+to\b/i,
+    /\bpaid\s+successfully\b/i,
+    /\bdebited\s+from\b/i,
+    /\baccount\s+debited\b/i,
+    /\bdebit\s+alert\b/i,
+    /\bdebit\s+from\b/i,
+    /\bbill\s+paid\b/i,
+    /\brecharge\s+successful\b/i,
+  ];
+
+  const hasOutgoing = outgoingPatterns.some(p => p.test(text));
+  const hasIncoming = incomingPatterns.some(p => p.test(text));
+
+  if (hasIncoming && !hasOutgoing) {
+    return { direction: 'incoming', isReceived: true, match: 'credited without outgoing context' };
+  }
+
+  return { direction: 'outgoing', isReceived: false, match: 'outgoing payment' };
+}
+
 // ── Strict 2-Hour (120-minute) Window Verification ─────────────────────────────
 function checkTransactionWindow(dateStr, timeStr, fileModified) {
   const now = new Date();
@@ -3916,8 +3962,10 @@ function extractUPIData(text, log) {
   if (!amount) missing.push('amount');
 
   // ── Extract remaining fields using existing logic ──────────────────
+  const dirCheck = detectPaymentDirection(t);
   let status = 'success';
-  if (/failed|declined|rejected|unsuccessful|could not|timed.?out|expired/i.test(t)) status='failed';
+  if (dirCheck.isReceived) status = 'received';
+  else if (/failed|declined|rejected|unsuccessful|could not|timed.?out|expired/i.test(t)) status='failed';
   else if (/pending|processing|in.?progress|initiated/i.test(t)) status='pending';
 
   let app = 'UPI';
@@ -4018,7 +4066,8 @@ function extractUPIData(text, log) {
   log(`amount=${amount} conf=${confidence} missing=[${missing}]`);
 
   return {amount, status, app, merchant:merchant||'UPI Payment',
-          txnId, date, time, bank, confidence, missingFields:missing};
+          txnId, date, time, bank, confidence, missingFields:missing,
+          direction:dirCheck.direction, isReceived:dirCheck.isReceived, directionReason:dirCheck.match};
 }
 
 
@@ -4041,6 +4090,14 @@ function BetaUpload({profile,onDone,onClose}){
   };
 
   const finaliseTx=async(parsed,file)=>{
+    // Block received payments before finalizing
+    if (parsed.status === 'received' || parsed.direction === 'incoming' || parsed.isReceived || /received\s+from|payment\s+received|money\s+received|cashback\s+received|refund\s+received/i.test(parsed.merchant || '')) {
+      log('REJECTED in finaliseTx: Received payment');
+      setPhase('error');
+      setErrMsg('Payment Received screenshot detected. Coins are only earned when you make a payment to someone (sent / paid). Money received does not earn coins.');
+      setSubmitting(false);
+      return;
+    }
     // Strict 2-hour window check before finalizing
     const winCheck = checkTransactionWindow(parsed.date, parsed.time, file?.lastModified);
     if (winCheck.expired) {
@@ -4215,6 +4272,12 @@ function BetaUpload({profile,onDone,onClose}){
       : Math.max(amtResult.score, 50);
 
     // STEP 5: Hard validation
+    if (extracted.status === 'received' || extracted.direction === 'incoming' || extracted.isReceived) {
+      log('REJECTED: Received/Incoming payment screenshot (' + extracted.directionReason + ')');
+      setPhase('error');
+      setErrMsg('Payment Received screenshot detected. Coins are only earned when you make a payment to someone (sent / paid). Money received does not earn coins.');
+      return;
+    }
     if(extracted.status==='failed'){
       setPhase('error');
       setErrMsg('This transaction failed. Only successful payments earn coins.');
@@ -4244,6 +4307,8 @@ function BetaUpload({profile,onDone,onClose}){
       await finaliseTx(extracted,file);
     }else{
       setReview({
+        isReceived:    extracted.isReceived,
+        direction:     extracted.direction,
         amount:   extracted.amount?String(extracted.amount):'',
         merchant: extracted.merchant!=='UPI Payment'?extracted.merchant:'',
         date:     extracted.date ||'',
@@ -4533,6 +4598,12 @@ function BetaUpload({profile,onDone,onClose}){
                     onClick={async()=>{
                       if(!review.amount||isNaN(Number(review.amount))||Number(review.amount)<=0){return;}
                       if(!review.merchant){return;}
+                      // Block received payments on review confirmation
+                      if (review.isReceived || review.direction === 'incoming' || /received\s+from|payment\s+received|money\s+received|cashback\s+received|refund\s+received/i.test(review.merchant || '')) {
+                        setPhase('error');
+                        setErrMsg('Payment Received screenshot detected. Coins are only earned when you make a payment to someone (sent / paid). Money received does not earn coins.');
+                        return;
+                      }
                       // Strict 2-hour window check on review confirmation
                       const winCheck = checkTransactionWindow(review.date, review.time, savedFile.current?.lastModified);
                       if (winCheck.expired) {
@@ -5699,6 +5770,12 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
 
   const handleTx=async(tx,ssUrl)=>{
     try {
+    // Block received payments
+    if (tx.isReceived || tx.direction === 'incoming' || tx.status === 'received' || /received\s+from|payment\s+received|money\s+received|cashback\s+received|refund\s+received/i.test(tx.merchant || '')) {
+      const msg = "Coins are only credited for payments made to merchants or individuals. Received payments are not eligible for coins.";
+      showNotif({ type: "error", title: "Ineligible Payment", sub: msg });
+      return { error: true, message: msg };
+    }
     // Strict 2-hour window check
     if (tx.date || tx.time) {
       const winCheck = checkTransactionWindow(tx.date, tx.time);
