@@ -4962,7 +4962,7 @@ function FounderDashboard({onClose, founderPw}){
     u.occupation?.toLowerCase().includes(search.toLowerCase())
   );
   const totalSpend=txns.reduce((s,t)=>s+Number(t.amount||0),0);
-  const totalCoins=(data?.overview?.stats?.total_coins_issued != null)?Number(data.overview.stats.total_coins_issued):txns.reduce((s,t)=>s+Number(t.total_coins||t.coins||t.base_coins||(Number(t.amount||0)*0.10)||0),0);
+  const totalCoins=Number(data?.overview?.stats?.total_coins_issued || 0) > 0 ? Number(data.overview.stats.total_coins_issued) : (users.reduce((s,u)=>s+Number(u.coin_balance||0),0) || txns.reduce((s,t)=>s+Number(t.total_coins||t.coins||t.base_coins||(Number(t.amount||0)*0.10)||0),0));
   const merchantMap=txns.reduce((a,t)=>{const m=t.merchant||"Unknown";a[m]=(a[m]||0)+1;return a;},{});
   const topMerchants=Object.entries(merchantMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
