@@ -2858,6 +2858,15 @@ async function apiSaveTx(tx, screenshotUrl) {
   return r; // { transaction, coin_balance, coins_earned }
 }
 
+async function apiDeleteTx(transactionId) {
+  const r = await apiFetch('/api/transactions', {
+    method: 'DELETE',
+    body: { transactionId },
+  });
+  if (isErr(r)) return { error: true, message: r.message };
+  return r; // { ok: true, deletedId, coin_balance }
+}
+
 async function apiGetTxns() {
   const r = await apiFetch('/api/transactions');
   if (isErr(r)) return [];
@@ -5867,6 +5876,51 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
   const [showInstallModal,setShowInstallModal]=useState(false);
   const [notif,setNotif]=useState(null);
   const [loadingData,setLoadingData]=useState(true);
+  const [deletingTx, setDeletingTx] = useState(null);
+  const [undoTx, setUndoTx] = useState(null);
+  const undoTimerRef = useRef(null);
+
+  const handleConfirmDelete = (tx) => {
+    if (!tx) return;
+    setDeletingTx(null);
+    const txId = tx.id;
+    const prevTxns = [...txns];
+    const prevCoins = coins;
+    const deduct = Number(tx.coins || tx.total_coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0);
+    const newTxns = txns.filter(t => t.id !== txId);
+    const newCoins = Math.max(0, parseFloat((coins - deduct).toFixed(1)));
+
+    setTxns(newTxns);
+    setCoins(newCoins);
+    if (onUpdateProfile) onUpdateProfile({ ...profile, coin_balance: newCoins });
+
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+
+    setUndoTx({ tx, prevTxns, prevCoins });
+
+    undoTimerRef.current = setTimeout(async () => {
+      setUndoTx(null);
+      try {
+        await apiDeleteTx(txId);
+        await lc.set("beta-txns-" + profile.email, newTxns);
+      } catch (err) {
+        console.error("Delete tx err:", err);
+      }
+    }, 3000);
+  };
+
+  const handleUndoDelete = () => {
+    if (!undoTx) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setTxns(undoTx.prevTxns);
+    setCoins(undoTx.prevCoins);
+    if (onUpdateProfile) onUpdateProfile({ ...profile, coin_balance: undoTx.prevCoins });
+    setUndoTx(null);
+    setNotif("Transaction restored");
+    if (notifTimer.current) clearTimeout(notifTimer.current);
+    notifTimer.current = setTimeout(() => setNotif(null), 2500);
+  };
+
   const [storeRewards,setStoreRewards]=useState([]); // grouped unique brand+label from API
   const [redeemedCodes,setRedeemedCodes]=useState({}); // {brand+label: code}
   const [redeemingId,setRedeemingId]=useState(null);
@@ -6642,9 +6696,26 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
                         color:"rgba(242,242,247,0.4)",fontStyle:"italic",
                         overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.purchase_note}</p>}
                     </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <p style={{margin:0,fontSize:13.5,fontWeight:700,color:T.text}}>₹{fmt(tx.amount)}</p>
-                      <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{tx.coins} coins</p>
+                    <div style={{textAlign:"right",flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
+                      <div>
+                        <p style={{margin:0,fontSize:13.5,fontWeight:700,color:T.text}}>₹{fmt(tx.amount)}</p>
+                        <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{tx.coins} coins</p>
+                      </div>
+                      <motion.button
+                        whileTap={{scale:0.85}}
+                        onClick={(e)=>{e.stopPropagation();setDeletingTx(tx);}}
+                        title="Remove transaction"
+                        style={{
+                          width:22,height:22,borderRadius:"50%",
+                          border:"1px solid rgba(255,255,255,0.12)",
+                          background:"rgba(255,255,255,0.05)",
+                          color:"rgba(242,242,247,0.45)",
+                          display:"flex",alignItems:"center",justifyContent:"center",
+                          cursor:"pointer",fontSize:10,fontWeight:700,padding:0,flexShrink:0
+                        }}
+                      >
+                        ✕
+                      </motion.button>
                     </div>
                   </div>
                   {isPending&&!tx.purchase_note&&(
@@ -6733,15 +6804,33 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
                           </motion.button>
                         )}
                       </div>
-                      <div style={{textAlign:"right",flexShrink:0}}>
-                        <p style={{margin:0,fontSize:13,fontWeight:700,color:T.text}}>₹{fmt(tx.amount)}</p>
-                        <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{tx.coins}</p>
-                        <motion.button whileTap={{scale:0.9}}
-                          onClick={()=>{setPurchaseInputTxId(tx.id);setPurchaseNote(tx.purchase_note||"");}}
-                          style={{marginTop:4,background:"none",border:"none",cursor:"pointer",padding:0,
-                            fontSize:10.5,fontWeight:600,fontFamily:"inherit",
-                            color:tx.purchase_note?T.textMute:T.blue}}>
-                          {tx.purchase_note?"Edit":"+ Add"}
+                      <div style={{textAlign:"right",flexShrink:0,display:"flex",alignItems:"flex-start",gap:8}}>
+                        <div>
+                          <p style={{margin:0,fontSize:13,fontWeight:700,color:T.text}}>₹{fmt(tx.amount)}</p>
+                          <p style={{margin:0,fontSize:11,fontWeight:700,color:T.gold}}>+{tx.coins}</p>
+                          <motion.button whileTap={{scale:0.9}}
+                            onClick={()=>{setPurchaseInputTxId(tx.id);setPurchaseNote(tx.purchase_note||"");}}
+                            style={{marginTop:4,background:"none",border:"none",cursor:"pointer",padding:0,
+                              fontSize:10.5,fontWeight:600,fontFamily:"inherit",
+                              color:tx.purchase_note?T.textMute:T.blue}}>
+                            {tx.purchase_note?"Edit":"+ Add"}
+                          </motion.button>
+                        </div>
+                        <motion.button
+                          whileTap={{scale:0.85}}
+                          onClick={(e)=>{e.stopPropagation();setDeletingTx(tx);}}
+                          title="Remove transaction"
+                          style={{
+                            width:22,height:22,borderRadius:"50%",
+                            border:"1px solid rgba(255,255,255,0.12)",
+                            background:"rgba(255,255,255,0.05)",
+                            color:"rgba(242,242,247,0.45)",
+                            display:"flex",alignItems:"center",justifyContent:"center",
+                            cursor:"pointer",fontSize:10,fontWeight:700,padding:0,flexShrink:0,
+                            marginTop:2
+                          }}
+                        >
+                          ✕
                         </motion.button>
                       </div>
                     </div>
@@ -6964,6 +7053,199 @@ function BetaDashboard({profile,onExplorePrototype,onUpdateProfile,onBetaTap,onL
           <span style={{fontSize:9.5,fontWeight:600,letterSpacing:"0.04em"}}>Rewards</span>
         </motion.button>
       </div>
+
+      {/* ── DELETE CONFIRMATION MODAL ── */}
+      <AnimatePresence>
+        {deletingTx && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setDeletingTx(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.78)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 20
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: 340,
+                background: "linear-gradient(145deg, #181820, #101015)",
+                border: "1px solid rgba(255,69,58,0.35)",
+                borderRadius: 24,
+                padding: "24px 20px",
+                boxShadow: "0 24px 60px rgba(0,0,0,0.85), 0 0 35px rgba(255,69,58,0.18)",
+                textAlign: "center"
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: "rgba(255,69,58,0.12)",
+                  border: "1px solid rgba(255,69,58,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 14px",
+                  fontSize: 20,
+                  color: "#FF453A",
+                  fontWeight: 800
+                }}
+              >
+                ✕
+              </div>
+              <h3 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 800, color: "#fff" }}>
+                Remove Transaction?
+              </h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "rgba(242,242,247,0.7)", lineHeight: 1.5 }}>
+                Remove <strong style={{ color: "#fff" }}>{deletingTx.merchant}</strong> (₹{fmt(deletingTx.amount)})?
+                <br />
+                <span style={{ fontSize: 12, color: "#FF453A", display: "inline-block", marginTop: 4 }}>
+                  ⚠️ {Number(deletingTx.coins || deletingTx.total_coins || (Number(deletingTx.amount||0)*0.10) || 0).toFixed(1)} coins will be deducted.
+                </span>
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setDeletingTx(null)}
+                  style={{
+                    flex: 1,
+                    padding: "11px 0",
+                    borderRadius: 13,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.06)",
+                    color: "rgba(242,242,247,0.8)",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleConfirmDelete(deletingTx)}
+                  style={{
+                    flex: 1,
+                    padding: "11px 0",
+                    borderRadius: 13,
+                    border: "none",
+                    background: "linear-gradient(135deg, #FF453A, #D70015)",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    boxShadow: "0 4px 15px rgba(255,69,58,0.4)",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  Remove
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 3-SECOND UNDO TOAST BAR ── */}
+      <AnimatePresence>
+        {undoTx && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            style={{
+              position: "fixed",
+              bottom: 84,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "calc(100% - 32px)",
+              maxWidth: 400,
+              background: "rgba(20, 20, 24, 0.96)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: "1px solid rgba(255, 255, 255, 0.16)",
+              borderRadius: 16,
+              padding: "12px 16px 14px",
+              boxShadow: "0 12px 35px rgba(0,0,0,0.65), 0 0 20px rgba(74,158,255,0.15)",
+              zIndex: 99998,
+              overflow: "hidden"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <span style={{ fontSize: 16 }}>🗑️</span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    Transaction removed
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(242,242,247,0.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {undoTx.tx.merchant} · ₹{fmt(undoTx.tx.amount)}
+                  </p>
+                </div>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                onClick={handleUndoDelete}
+                style={{
+                  background: "linear-gradient(135deg, #4A9EFF, #0A84FF)",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "6px 14px",
+                  color: "#fff",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: "0.04em",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 10px rgba(74,158,255,0.4)",
+                  fontFamily: "inherit",
+                  flexShrink: 0
+                }}
+              >
+                UNDO
+              </motion.button>
+            </div>
+            {/* 3-Second Shrinking Countdown Line */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 3,
+                background: "rgba(255,255,255,0.1)"
+              }}
+            >
+              <motion.div
+                initial={{ width: "100%" }}
+                animate={{ width: "0%" }}
+                transition={{ duration: 3, ease: "linear" }}
+                style={{
+                  height: "100%",
+                  background: "linear-gradient(90deg, #4A9EFF, #E8C46A)"
+                }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── IOS INSTALL GUIDE MODAL ── */}
       <AnimatePresence>

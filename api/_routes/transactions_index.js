@@ -152,5 +152,32 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: err.message });
     }
   }
+    if (req.method === 'DELETE') {
+    const { transactionId } = req.body || {};
+    if (!transactionId) return res.status(400).json({ error: 'transactionId required' });
+    const sql = getDb();
+    try {
+      const txRows = await sql`SELECT * FROM transactions WHERE id=${transactionId} AND user_id=${payload.userId}`;
+      if (!txRows.length) return res.status(404).json({ error: 'Transaction not found' });
+      const tx = txRows[0];
+      const deductCoins = Number(tx.total_coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0);
+      const deductBase = Number(tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0);
+      const deductBonus = Number(tx.bonus_coins || 0);
+
+      await sql`DELETE FROM transactions WHERE id=${transactionId}`;
+      await sql`UPDATE users SET 
+        coin_balance = GREATEST(0, coin_balance - ${deductCoins}),
+        base_coins = GREATEST(0, base_coins - ${deductBase}),
+        bonus_coins = GREATEST(0, bonus_coins - ${deductBonus}),
+        updated_at = NOW()
+        WHERE id=${payload.userId}`;
+
+      const uRows = await sql`SELECT coin_balance,base_coins,bonus_coins FROM users WHERE id=${payload.userId}`;
+      return res.status(200).json({ ok: true, deletedId: transactionId, coin_balance: Number(uRows[0]?.coin_balance || 0) });
+    } catch(err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   return res.status(405).json({ error: 'Method not allowed' });
 }
