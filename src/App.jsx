@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 ﻿import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogoBadge, RewardStoreView, FounderRewardsTab } from "./RewardsSystem";
@@ -4940,111 +4941,99 @@ function FounderDashboard({onClose, founderPw}){
   };
 
   const downloadMultiSheetExcel = () => {
-    const { spendByUser, merchantByUser } = computeUserAggregates();
-    const escapeXml = s => (s === null || s === undefined ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;'));
+    try {
+      const { spendByUser, merchantByUser } = computeUserAggregates();
 
-    const sheet1Headers = ["Name", "Age", "Occupation", "Mail ID", "Total Spend (₹)", "Top Spent Area", "Total Transactions", "Coins Balance", "Joined Date"];
-    const sheet1Rows = users.map(u => {
-      const email = (u.email || '').toLowerCase();
-      const totalSpend = spendByUser[email] || 0;
-      const mCounts = merchantByUser[email] || {};
-      let topMerchant = 'None';
-      let maxM = 0;
-      for (const [m, amt] of Object.entries(mCounts)) {
-        if (amt > maxM) { maxM = amt; topMerchant = m; }
-      }
-      return [
-        u.name || "Anonymous",
-        u.age || "N/A",
-        u.occupation || "N/A",
-        u.email || "",
-        totalSpend.toFixed(2),
-        topMerchant,
-        txns.filter(t => (t.user_email||'').toLowerCase() === email).length,
-        Number(u.coin_balance || 0).toFixed(1),
-        u.joined_at ? new Date(u.joined_at).toLocaleDateString('en-IN') : "N/A"
-      ];
-    });
+      const sheet1Headers = ["Name", "Age", "Occupation", "Mail ID", "Total Spend (₹)", "Top Spent Area", "Total Transactions", "Coins Balance", "Joined Date"];
+      const sheet1Rows = users.map(u => {
+        const email = (u.email || '').toLowerCase();
+        const totalSpend = spendByUser[email] || 0;
+        const mCounts = merchantByUser[email] || {};
+        let topMerchant = 'None';
+        let maxM = 0;
+        for (const [m, amt] of Object.entries(mCounts)) {
+          if (amt > maxM) { maxM = amt; topMerchant = m; }
+        }
+        return [
+          u.name || "Anonymous",
+          u.age || "N/A",
+          u.occupation || "N/A",
+          u.email || "",
+          Number(totalSpend.toFixed(2)),
+          topMerchant,
+          txns.filter(t => (t.user_email || '').toLowerCase() === email).length,
+          Number(Number(u.coin_balance || 0).toFixed(1)),
+          u.joined_at ? new Date(u.joined_at).toLocaleDateString('en-IN') : "N/A"
+        ];
+      });
 
-    const sheet2Headers = ["Date Uploaded", "Time", "Payer Name", "Payee Name", "Transaction ID", "Transaction Amount (₹)", "Coins Earned", "Extra Coins Earned", "Details Provided", "Platform Used", "Bank Name", "Screenshot Link"];
-    const sheet2Rows = txns.map(t => {
-      let ssText = "No Screenshot";
-      if (t.screenshot_url && t.screenshot_url.startsWith("http")) {
-        ssText = t.screenshot_url;
-      } else if (t.screenshot_url && t.screenshot_url.startsWith("data:image")) {
-        ssText = "Saved in Neon DB (Base64 JPEG)";
-      }
-      return [
-        t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN') : (t.txn_date || ""),
-        t.created_at ? new Date(t.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : (t.txn_time || ""),
-        t.user_name || (users.find(u=>u.id===t.user_id)?.name) || "Unknown",
-        t.merchant || "",
-        t.txn_id || "N/A",
-        Number(t.amount || 0).toFixed(2),
-        Number(t.base_coins || t.coins || 0).toFixed(1),
-        Number(t.bonus_coins || 0).toFixed(1),
-        t.purchase_note || "None",
-        t.payment_app || "UPI",
-        t.bank || "UPI Bank",
-        ssText
-      ];
-    });
+      const sheet2Headers = ["Date Uploaded", "Time", "Payer Name", "Payee Name", "Transaction ID", "Transaction Amount (₹)", "Coins Earned", "Extra Coins Earned", "Details Provided", "Platform Used", "Bank Name", "Screenshot Link"];
+      const sheet2Rows = txns.map(t => {
+        let ssText = "No Screenshot";
+        if (t.screenshot_url && t.screenshot_url.startsWith("http")) {
+          ssText = t.screenshot_url;
+        } else if (t.screenshot_url && t.screenshot_url.startsWith("data:image")) {
+          ssText = "Saved in Neon DB (Base64 JPEG)";
+        }
+        return [
+          t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN') : (t.txn_date || ""),
+          t.created_at ? new Date(t.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : (t.txn_time || ""),
+          t.user_name || (users.find(u => u.id === t.user_id)?.name) || "Unknown",
+          t.merchant || "",
+          t.txn_id || "N/A",
+          Number(Number(t.amount || 0).toFixed(2)),
+          Number(Number(t.base_coins || t.coins || 0).toFixed(1)),
+          Number(Number(t.bonus_coins || 0).toFixed(1)),
+          t.purchase_note || "None",
+          t.payment_app || "UPI",
+          t.bank || "UPI Bank",
+          ssText
+        ];
+      });
 
-    const makeRow = cells => `<Row>` + cells.map(c => {
-      const isNum = typeof c === 'number' || (!isNaN(c) && c !== '' && !String(c).includes('-') && !String(c).includes(':') && !String(c).includes('/'));
-      return `<Cell><Data ss:Type="${isNum ? 'Number' : 'String'}">${escapeXml(c)}</Data></Cell>`;
-    }).join('') + `</Row>`;
+      // Build real binary .xlsx workbook
+      const wb = XLSX.utils.book_new();
+      const ws1 = XLSX.utils.aoa_to_sheet([sheet1Headers, ...sheet1Rows]);
+      const ws2 = XLSX.utils.aoa_to_sheet([sheet2Headers, ...sheet2Rows]);
 
-    const xml = `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
- <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Bottom"/>
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
-  </Style>
-  <Style ss:ID="Header1">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
-   <Interior ss:Color="#1A5FC8" ss:Pattern="Solid"/>
-   <Alignment ss:Horizontal="Center"/>
-  </Style>
-  <Style ss:ID="Header2">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
-   <Interior ss:Color="#107C41" ss:Pattern="Solid"/>
-   <Alignment ss:Horizontal="Center"/>
-  </Style>
- </Styles>
- <Worksheet ss:Name="Login Data">
-  <Table>
-   <Row ss:StyleID="Header1">
-    ${sheet1Headers.map(h => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`).join('')}
-   </Row>
-   ${sheet1Rows.map(makeRow).join('\n   ')}
-  </Table>
- </Worksheet>
- <Worksheet ss:Name="Transactional Data">
-  <Table>
-   <Row ss:StyleID="Header2">
-    ${sheet2Headers.map(h => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`).join('')}
-   </Row>
-   ${sheet2Rows.map(makeRow).join('\n   ')}
-  </Table>
- </Worksheet>
-</Workbook>`;
+      // Auto-fit column widths
+      const setColWidths = (ws, data) => {
+        if (!data || !data.length) return;
+        const colWidths = data[0].map((_, colIdx) => {
+          let maxLen = 10;
+          for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
+            const val = data[rowIdx][colIdx];
+            if (val !== null && val !== undefined) {
+              maxLen = Math.max(maxLen, String(val).length);
+            }
+          }
+          return { wch: Math.min(maxLen + 3, 50) };
+        });
+        ws['!cols'] = colWidths;
+      };
 
-    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Paymint_Master_Data_${new Date().toISOString().split('T')[0]}.xls`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      setColWidths(ws1, [sheet1Headers, ...sheet1Rows]);
+      setColWidths(ws2, [sheet2Headers, ...sheet2Rows]);
+
+      XLSX.utils.book_append_sheet(wb, ws1, "Login Data");
+      XLSX.utils.book_append_sheet(wb, ws2, "Transactional Data");
+
+      // Write valid ZIP-based Office Open XML (.xlsx)
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Paymint_Master_Data_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(err) {
+      console.error('[Export XLSX Error]', err);
+      // Fallback: direct download from server route
+      window.open(`/api/admin/export-xlsx?founderPw=${encodeURIComponent(founderPw || 'BK11')}`, '_blank');
+    }
   };
 
   const downloadCSV = (filename, headers, rows) => {
@@ -5260,7 +5249,7 @@ function FounderDashboard({onClose, founderPw}){
                     border:"1px solid rgba(74,158,255,0.4)",color:"#FFF",fontSize:13.5,fontWeight:700,
                     cursor:"pointer",marginBottom:8,fontFamily:"inherit"}}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 10v3a1 1 0 001 1h9a1 1 0 001-1v-3M8 2v9M4.5 7.5L8 11l3.5-3.5" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <span>Download Multi-Sheet Excel (.xls)</span>
+                  <span>Download Multi-Sheet Excel (.xlsx)</span>
                 </motion.button>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <motion.button whileTap={{scale:0.96}} onClick={downloadLoginDataCSV}
