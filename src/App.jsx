@@ -4876,6 +4876,7 @@ function FounderDashboard({onClose, founderPw}){
   const [editForm,setEditForm]=useState({});
   const [actionMsg,setActionMsg]=useState("");
   const [refreshKey,setRefreshKey]=useState(0);
+  const [isRefreshing,setIsRefreshing]=useState(false);
   // Rewards manager state
   const [rewards,setRewards]=useState([]);
   const [rewardsLoading,setRewardsLoading]=useState(false);
@@ -4931,7 +4932,16 @@ function FounderDashboard({onClose, founderPw}){
     return () => { active = false; clearTimeout(fallbackTimer); };
   },[refreshKey, founderPw]);
 
-  const refresh=()=>setRefreshKey(k=>k+1);
+  const refresh=()=>{
+    setIsRefreshing(true);
+    setActionMsg("Refreshing live data…");
+    setRefreshKey(k=>k+1);
+    setTimeout(()=>{
+      setIsRefreshing(false);
+      setActionMsg("Live data updated!");
+      setTimeout(()=>setActionMsg(""), 2500);
+    }, 1200);
+  };
 
   const users = Array.isArray(data?.users) ? data.users : [];
   const txns = Array.isArray(data?.txns) ? data.txns : [];
@@ -5443,25 +5453,34 @@ function FounderDashboard({onClose, founderPw}){
             <p style={{margin:0,fontSize:10,color:T.error,fontWeight:700,letterSpacing:"0.1em"}}>FOUNDER ONLY</p>
             <h2 style={{margin:0,fontSize:18,fontWeight:800,color:T.text}}>Admin Dashboard</h2>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            {/* Prominent Refresh Button */}
+            <motion.button whileTap={{scale:0.92}} onClick={refresh} disabled={isRefreshing||loading}
+              style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,
+                background:isRefreshing?"rgba(74,158,255,0.22)":"rgba(74,158,255,0.12)",
+                border:"1px solid rgba(74,158,255,0.35)",color:T.blue,fontSize:12,fontWeight:700,
+                cursor:isRefreshing||loading?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:"0 2px 10px rgba(74,158,255,0.15)"}}>
+              <motion.svg animate={isRefreshing||loading?{rotate:360}:{}}
+                transition={{duration:1,repeat:isRefreshing||loading?Infinity:0,ease:"linear"}}
+                width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M14 8A6 6 0 102 8M2 4v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </motion.svg>
+              <span>{isRefreshing?"Updating…":"Refresh"}</span>
+            </motion.button>
+
+            {/* Export Button */}
             <motion.button whileTap={{scale:0.92}} onClick={()=>setShowExportModal(true)}
-              style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:9,
-                background:"rgba(74,158,255,0.12)",border:"1px solid rgba(74,158,255,0.32)",
-                color:T.blue,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              style={{display:"flex",alignItems:"center",gap:5,padding:"6px 11px",borderRadius:10,
+                background:"rgba(16,124,65,0.15)",border:"1px solid rgba(16,124,65,0.35)",
+                color:"#68D391",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <path d="M2.5 10v3a1 1 0 001 1h9a1 1 0 001-1v-3M8 2v9M4.5 7.5L8 11l3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               <span>Export</span>
             </motion.button>
-            <motion.button whileTap={{scale:0.9}} onClick={refresh}
-              style={{width:32,height:32,borderRadius:9,background:T.glass,border:`1px solid ${T.glassBorder}`,
-                display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M14 8A6 6 0 102 8M2 4v4h4" stroke={T.textSub} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </motion.button>
+
             <motion.div animate={{opacity:[0.5,1,0.5]}} transition={{duration:1.5,repeat:Infinity}}
-              style={{width:7,height:7,borderRadius:"50%",background:"#00FF88",boxShadow:"0 0 8px #00FF88"}}/>
+              style={{width:7,height:7,borderRadius:"50%",background:"#00FF88",boxShadow:"0 0 8px #00FF88",marginLeft:2}}/>
           </div>
         </div>
 
