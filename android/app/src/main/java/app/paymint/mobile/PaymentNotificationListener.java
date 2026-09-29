@@ -33,10 +33,7 @@ public class PaymentNotificationListener extends NotificationListenerService {
         "com.amazon.mShop.android.shopping"       // Amazon Pay
     };
 
-    private static final Pattern AMOUNT_PATTERN = Pattern.compile(
-        "(?:(?:Rs\\.?|INR|?)\\s*([0-9,]+(?:\\.[0-9]{1,2})?))|(?:(?:paid|sent|debited)\\s*(?:Rs\\.?|INR|?)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?))",
-        Pattern.CASE_INSENSITIVE
-    );
+    private static final Pattern AMOUNT_PATTERN = Pattern.compile("(?:(?:Rs\\.?|INR|\\u20B9)\\s*([0-9,]+(?:\\.[0-9]{1,2})?))|(?:(?:paid|sent|debited)\\s*(?:Rs\\.?|INR|\\u20B9)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?))", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern MERCHANT_PATTERN = Pattern.compile(
         "(?:to|at|for)\\s+([A-Za-z0-9\\s&'\\.-]{2,30})",
