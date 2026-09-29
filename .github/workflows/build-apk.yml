@@ -42,7 +42,15 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace || (./gradlew assembleDebug --stacktrace --info 2>&1 | tail -n 100 && exit 1)
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle-build.log
+
+      - name: Upload Build Log On Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gradle-Build-Log
+          path: gradle-build.log
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
