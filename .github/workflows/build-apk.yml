@@ -43,17 +43,20 @@ jobs:
         run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Build Android APK
+        id: build_apk
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle_output.txt
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../build.log
+        continue-on-error: true
 
-      - name: Upload Build Log On Always
+      - name: Publish Build Log Summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Gradle-Build-Log
-          path: gradle_output.txt
+        run: |
+          echo "## Gradle Build Diagnostics" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          tail -n 150 build.log >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -63,3 +66,7 @@ jobs:
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/outputs/**/*.apk
           if-no-files-found: warn
+
+      - name: Check Build Success
+        if: steps.build_apk.outcome != 'success'
+        run: exit 1
