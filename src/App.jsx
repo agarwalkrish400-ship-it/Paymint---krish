@@ -5347,9 +5347,9 @@ function FounderDashboard({ onClose, founderPw }) {
     u.occupation?.toLowerCase().includes(search.toLowerCase())
   );
   const totalSpend = txns.reduce((s, t) => s + Number(t.amount || 0), 0);
-  const sumUserCoins = users.reduce((s, u) => s + Number(u.coin_balance || u.total_coins_earned || 0), 0);
+  const sumUserCoins = users.reduce((s, u) => s + Number(u.coin_balance || 0), 0);
   const sumTxnCoins = txns.reduce((s, t) => s + Number(t.total_coins || t.coins || t.base_coins || (Number(t.amount || 0) * 0.10) || 0), 0);
-  const totalCoins = Math.max(Number(data?.overview?.stats?.total_coins_issued || 0), sumTxnCoins, sumUserCoins);
+  const totalCoins = sumUserCoins > 0 ? sumUserCoins : Math.max(Number(data?.overview?.stats?.total_coins_issued || 0), sumTxnCoins);
   const merchantMap = txns.reduce((a, t) => { const m = t.merchant || "Unknown"; a[m] = (a[m] || 0) + 1; return a; }, {});
   const topMerchants = Object.entries(merchantMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
 
@@ -6176,6 +6176,14 @@ function FounderDashboard({ onClose, founderPw }) {
                         <circle cx="7" cy="7" r="5" stroke={T.textMute} strokeWidth="1.5" />
                         <path d="M11 11l3 3" stroke={T.textMute} strokeWidth="1.5" strokeLinecap="round" />
                       </svg>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, padding: "0 4px" }}>
+                      <p style={{ margin: 0, fontSize: 12, color: T.textMute }}>
+                        {filtered.length} {filtered.length === 1 ? "user" : "users"}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.gold }}>
+                        Total: {totalCoins.toFixed(1)} coins
+                      </p>
                     </div>
                     {filtered.length === 0
                       ? <p style={{ color: T.textMute, fontSize: 13, textAlign: "center", paddingTop: 20 }}>No users found</p>
