@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       if (t.screenshot_url && t.screenshot_url.startsWith("http")) {
         ssText = t.screenshot_url;
       } else if (t.screenshot_url && t.screenshot_url.startsWith("data:image")) {
-        ssText = "Saved in Neon DB (Base64 JPEG)";
+        ssText = `https://paymint-krish2.vercel.app/api/admin/screenshot?id=${t.id}&founderPw=BK11`;
       }
       return [
         t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN') : (t.txn_date || ""),

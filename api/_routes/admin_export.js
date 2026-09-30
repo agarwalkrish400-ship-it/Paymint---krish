@@ -73,7 +73,10 @@ export default async function handler(req, res) {
       details_provided: t.purchase_note || 'None',
       platform_used: t.payment_app || 'UPI',
       bank_name: t.bank || 'UPI Bank',
-      screenshot_url: t.screenshot_url || '',
+      screenshot_url: t.screenshot_url?.startsWith('data:') 
+        ? `https://paymint-krish2.vercel.app/api/admin/screenshot?id=${t.id}&founderPw=BK11` 
+        : (t.screenshot_url || ''),
+      screenshot_base64: t.screenshot_url?.startsWith('data:') ? t.screenshot_url : '',
       created_at: t.created_at
     }));
 
@@ -94,7 +97,15 @@ export default async function handler(req, res) {
           })
         });
         const text = await resp.text();
-        syncResult = { ok: resp.ok, status: resp.status, response: text };
+        let parsed = null;
+        try { parsed = JSON.parse(text); } catch(e) {}
+        syncResult = { 
+          ok: resp.ok, 
+          status: resp.status, 
+          response: text, 
+          sheetUrl: parsed?.sheetUrl || null,
+          driveFolderUrl: parsed?.driveFolderUrl || null
+        };
       } catch (e) {
         syncResult = { ok: false, error: e.message };
       }
@@ -104,7 +115,8 @@ export default async function handler(req, res) {
       ok: true,
       login_data: loginData,
       transactional_data: transactionalData,
-      sync_result: syncResult
+      sync_result: syncResult,
+      sheet_url: syncResult?.sheetUrl || null
     });
   } catch (err) {
     console.error('[/api/admin/export]', err.message);

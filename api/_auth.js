@@ -33,9 +33,18 @@ export function authUser(req) {
   return verifyToken(auth.slice(7));
 }
 export function isFounder(req) {
-  const pw    = req.headers['x-founder-password'] || '';
-  const valid = (process.env.FOUNDER_PASSWORD || 'BK11').split(',');
-  return valid.includes(pw.trim());
+  let pw = req.headers['x-founder-password'] || '';
+  if (!pw && req.url) {
+    try {
+      const u = new URL(req.url, 'http://localhost');
+      pw = u.searchParams.get('founderPw') || u.searchParams.get('pw') || '';
+    } catch(e) {}
+  }
+  if (!pw && req.query) {
+    pw = req.query.founderPw || req.query.pw || '';
+  }
+  const valid = (process.env.FOUNDER_PASSWORD || 'BK11').split(',').map(v => v.trim().toLowerCase());
+  return valid.includes(pw.trim().toLowerCase());
 }
 export function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin','*');

@@ -1,37 +1,61 @@
 /**
  * PAYMINT FOUNDER GOOGLE APPS SCRIPT
- * Account: agarwalkrish400@gmail.com
+ * Target Drive Folder: https://drive.google.com/drive/folders/11xVnc72QGhOO0IeTmJFe7HJ0xxuxVqnb
+ * Folder ID: 11xVnc72QGhOO0IeTmJFe7HJ0xxuxVqnb
  *
- * HOW TO SET UP (Takes 1 minute):
- * 1. Open Google Sheets (https://sheets.new)
- * 2. Name the spreadsheet: "Paymint Master Founder Data"
- * 3. Click Extensions -> Apps Script
- * 4. Paste this ENTIRE code into the editor and click "Save" (Floppy disk icon)
- * 5. Click "Deploy" -> "New deployment" -> Select type: "Web app"
- * 6. Set Description: "Paymint Sync"
- * 7. Execute as: "Me (agarwalkrish400@gmail.com)"
- * 8. Who has access: "Anyone" (so Paymint backend can post transactions)
- * 9. Click "Deploy" and copy the Web App URL!
- * 10. Paste the Web App URL into the Paymint Founder Dashboard Export Hub.
+ * This script AUTOMATICALLY:
+ * 1. Creates/locates "Paymint Master Founder Data" multi-sheet Google Sheet inside your Drive folder.
+ * 2. Populates Sheet 1 ("Login Data") with all user metrics & spend.
+ * 3. Populates Sheet 2 ("Transactional Data") with all transaction records.
+ * 4. Decodes each transaction screenshot into a real .jpg file in the SAME Drive folder.
+ * 5. Inserts direct Google Drive links to each screenshot in Sheet 2.
  */
 
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // ── 1. GOOGLE DRIVE FOLDER FOR SCREENSHOTS ──────────────────────────────
+    // ── 1. TARGET GOOGLE DRIVE FOLDER ──────────────────────────────────────
+    const TARGET_FOLDER_ID = "11xVnc72QGhOO0IeTmJFe7HJ0xxuxVqnb";
     let driveFolder;
-    const folderName = "Paymint Beta Screenshots";
-    const folders = DriveApp.getFoldersByName(folderName);
-    if (folders.hasNext()) {
-      driveFolder = folders.next();
-    } else {
-      driveFolder = DriveApp.createFolder(folderName);
-      driveFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    try {
+      driveFolder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    } catch(err) {
+      const folders = DriveApp.getFoldersByName("Paymint Beta Screenshots");
+      driveFolder = folders.hasNext() ? folders.next() : DriveApp.createFolder("Paymint Beta Screenshots");
+      try { driveFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e){}
     }
 
-    // ── 2. SHEET 1: LOGIN DATA ─────────────────────────────────────────────
+    // ── 2. GET OR CREATE MULTI-SHEET GOOGLE SHEET INSIDE DRIVE FOLDER ──────
+    let ss;
+    const SHEET_NAME = "Paymint Master Founder Data";
+    const existingSheets = driveFolder.getFilesByName(SHEET_NAME);
+    
+    if (existingSheets.hasNext()) {
+      ss = SpreadsheetApp.open(existingSheets.next());
+    } else {
+      // Check if bound to an active spreadsheet
+      try {
+        const active = SpreadsheetApp.getActiveSpreadsheet();
+        if (active) ss = active;
+      } catch(e) {}
+
+      // If standalone or not in folder yet, create spreadsheet in target folder
+      if (!ss) {
+        ss = SpreadsheetApp.create(SHEET_NAME);
+        const file = DriveApp.getFileById(ss.getId());
+        driveFolder.addFile(file);
+        try { DriveApp.getRootFolder().removeFile(file); } catch(e){}
+      }
+    }
+
+    // Ensure spreadsheet is accessible with link
+    try {
+      const sheetFile = DriveApp.getFileById(ss.getId());
+      sheetFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch(e) {}
+
+    // ── 3. SHEET 1: LOGIN DATA ─────────────────────────────────────────────
     let sheet1 = ss.getSheetByName("Login Data");
     if (!sheet1) {
       sheet1 = ss.insertSheet("Login Data", 0);
@@ -70,7 +94,7 @@ function doPost(e) {
       sheet1.getRange(2, 1, uRows.length, sheet1Headers.length).setValues(uRows);
     }
 
-    // ── 3. SHEET 2: TRANSACTIONAL DATA ─────────────────────────────────────
+    // ── 4. SHEET 2: TRANSACTIONAL DATA ─────────────────────────────────────
     let sheet2 = ss.getSheetByName("Transactional Data");
     if (!sheet2) {
       sheet2 = ss.insertSheet("Transactional Data", 1);
@@ -100,23 +124,37 @@ function doPost(e) {
     if (data.transactional_data && data.transactional_data.length > 0) {
       const tRows = data.transactional_data.map(t => {
         let screenshotLink = "None";
-        if (t.screenshot_url && t.screenshot_url.startsWith("http")) {
-          screenshotLink = t.screenshot_url;
-        } else if (t.screenshot_url && t.screenshot_url.startsWith("data:image")) {
+        const rawSs = t.screenshot_base64 || (t.screenshot_url && t.screenshot_url.startsWith("data:") ? t.screenshot_url : null);
+
+        if (rawSs) {
           try {
             // Save base64 image directly to Google Drive folder
-            const parts = t.screenshot_url.split(",");
-            const base64Data = parts[1];
-            const mimeType = parts[0].split(";")[0].replace("data:", "");
+            const commaIdx = rawSs.indexOf(",");
+            const base64Data = commaIdx !== -1 ? rawSs.slice(commaIdx + 1) : rawSs;
+            const mimeType = (rawSs.match(/data:([^;]+)/) || [])[1] || "image/jpeg";
             const decoded = Utilities.base64Decode(base64Data);
-            const fileName = `paymint_${(t.payee_name || "txn").replace(/[^a-zA-Z0-9]/g, "_")}_${t.transaction_amount || 0}_${Date.now()}.jpg`;
-            const blob = Utilities.newBlob(decoded, mimeType, fileName);
-            const driveFile = driveFolder.createFile(blob);
-            driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+            const safePayee = (t.payee_name || "txn").replace(/[^a-zA-Z0-9]/g, "_");
+            const safeTxnId = (t.transaction_id || t.id || "tx").replace(/[^a-zA-Z0-9]/g, "_");
+            const fileName = `Paymint_${safePayee}_${t.transaction_amount || 0}_${safeTxnId}.jpg`;
+
+            // Avoid duplicate files if synced multiple times
+            const existing = driveFolder.getFilesByName(fileName);
+            let driveFile;
+            if (existing.hasNext()) {
+              driveFile = existing.next();
+            } else {
+              const blob = Utilities.newBlob(decoded, mimeType, fileName);
+              driveFile = driveFolder.createFile(blob);
+              try {
+                driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+              } catch(e) {}
+            }
             screenshotLink = driveFile.getUrl();
           } catch (err) {
-            screenshotLink = "Drive Upload Error: " + err.message;
+            screenshotLink = t.screenshot_url || ("Drive Upload Error: " + err.message);
           }
+        } else if (t.screenshot_url) {
+          screenshotLink = t.screenshot_url;
         }
 
         return [
@@ -144,9 +182,10 @@ function doPost(e) {
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: "Synced to Google Sheets and Drive successfully!",
+      message: "Multi-sheet Google Sheet created and synced in Drive folder successfully!",
       usersCount: data.login_data ? data.login_data.length : 0,
       txnsCount: data.transactional_data ? data.transactional_data.length : 0,
+      sheetUrl: ss.getUrl(),
       driveFolderUrl: driveFolder.getUrl()
     })).setMimeType(ContentService.MimeType.JSON);
 
@@ -159,5 +198,5 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput("Paymint Google Sheets & Drive Webhook is Active!").setMimeType(ContentService.MimeType.TEXT);
+  return ContentService.createTextOutput("Paymint Google Sheets & Drive Webhook is Active! Target Folder: 11xVnc72QGhOO0IeTmJFe7HJ0xxuxVqnb").setMimeType(ContentService.MimeType.TEXT);
 }

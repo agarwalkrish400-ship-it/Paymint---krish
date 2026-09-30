@@ -5297,6 +5297,8 @@ function FounderDashboard({ onClose, founderPw }) {
     try { return localStorage.getItem("pm_founder_sheet_url") || "https://docs.google.com/spreadsheets/u/0/"; } catch { return "https://docs.google.com/spreadsheets/u/0/"; }
   });
   const [showScriptHelp, setShowScriptHelp] = useState(false);
+  const [previewTx, setPreviewTx] = useState(null);
+  const [imgZoomed, setImgZoomed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -5432,6 +5434,85 @@ function FounderDashboard({ onClose, founderPw }) {
     if (d < 86400) return `${Math.floor(d / 3600)}h ago`; return `${Math.floor(d / 86400)}d ago`;
   };
 
+  const getScreenshotSrc = (url) => {
+    if (!url) return '';
+    const trimmed = String(url).trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+      return trimmed;
+    }
+    return `data:image/jpeg;base64,${trimmed}`;
+  };
+
+  const handleDownloadScreenshot = (tx) => {
+    if (!tx || !tx.screenshot_url) return;
+    const url = String(tx.screenshot_url).trim();
+    const safeMerchant = (tx.merchant || "UPI").replace(/[^a-zA-Z0-9]/g, "_");
+    const filename = `Paymint_${safeMerchant}_${tx.txn_id || tx.id || 'screenshot'}.jpg`;
+
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+
+    try {
+      const parts = url.split(",");
+      const byteString = atob(parts[1] || parts[0]);
+      const mime = parts[0]?.match(/:(.*?);/)?.[1] || "image/jpeg";
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }, 1500);
+    } catch (e) {
+      console.error("Screenshot download failed:", e);
+    }
+  };
+
+  const handleOpenFullScreenshot = (tx) => {
+    if (!tx || !tx.screenshot_url) return;
+    const url = String(tx.screenshot_url).trim();
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    try {
+      const parts = url.split(",");
+      const byteString = atob(parts[1] || parts[0]);
+      const mime = parts[0]?.match(/:(.*?);/)?.[1] || "image/jpeg";
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      const win = window.open(blobUrl, "_blank");
+      if (!win) {
+        handleDownloadScreenshot(tx);
+      }
+    } catch (e) {
+      console.error("Failed to open screenshot full view:", e);
+      handleDownloadScreenshot(tx);
+    }
+  };
+
   // ── MULTI-SHEET EXPORT HELPERS ──────────────────────────────────────────────
   const computeUserAggregates = () => {
     const spendByUser = {};
@@ -5480,7 +5561,7 @@ function FounderDashboard({ onClose, founderPw }) {
         if (t.screenshot_url && t.screenshot_url.startsWith("http")) {
           ssText = t.screenshot_url;
         } else if (t.screenshot_url && t.screenshot_url.startsWith("data:image")) {
-          ssText = "Saved in Neon DB (Base64 JPEG)";
+          ssText = `https://paymint-krish2.vercel.app/api/admin/screenshot?id=${t.id}&founderPw=${encodeURIComponent(founderPw || 'BK11')}`;
         }
         return [
           t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN') : (t.txn_date || ""),
@@ -5609,6 +5690,14 @@ function FounderDashboard({ onClose, founderPw }) {
     setSyncingSheets(true);
     setSyncFeedback(null);
     try {
+      if (webhookUrl && (webhookUrl.includes("drive.google.com") || webhookUrl.includes("docs.google.com/spreadsheets"))) {
+        setSyncFeedback({
+          type: "error",
+          text: "⚠️ That is a Google Drive link, not an Apps Script Web App URL! Web App URLs look like: https://script.google.com/macros/s/.../exec (See the 1-min guide above)."
+        });
+        setSyncingSheets(false);
+        return;
+      }
       if (webhookUrl) {
         try { localStorage.setItem("pm_founder_webhook", webhookUrl.trim()); } catch { }
       }
@@ -5618,10 +5707,15 @@ function FounderDashboard({ onClose, founderPw }) {
         body: { webhookUrl: webhookUrl.trim() || undefined }
       });
       if (res && res.ok) {
-        const msg = res.sync_result?.ok
-          ? `Successfully synced ${res.login_data?.length || 0} users and ${res.transactional_data?.length || 0} txns directly to your Google Sheet!`
+        const foundSheetUrl = res.sheet_url || res.sync_result?.sheetUrl || res.sync_result?.sheet_url;
+        if (foundSheetUrl) {
+          setSheetUrl(foundSheetUrl);
+          try { localStorage.setItem("pm_founder_sheet_url", foundSheetUrl); } catch(e){}
+        }
+        const msg = res.sync_result?.ok 
+          ? `Successfully created & synced multi-sheet Google Sheet in your Drive folder!`
           : `Export data ready (${res.login_data?.length || 0} users, ${res.transactional_data?.length || 0} txns).`;
-        setSyncFeedback({ type: "success", text: msg });
+        setSyncFeedback({ type: "success", text: msg, sheetUrl: foundSheetUrl });
       } else {
         setSyncFeedback({ type: "error", text: res?.error || "Sync failed. Check your Webhook URL." });
       }
@@ -5672,6 +5766,122 @@ function FounderDashboard({ onClose, founderPw }) {
                 <Btn onClick={handleSaveEdit} full>Save Changes</Btn>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── INTERACTIVE SCREENSHOT PREVIEW MODAL ── */}
+      <AnimatePresence>
+        {previewTx && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.94)",
+              backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
+              display:"flex",flexDirection:"column"}}>
+            
+            {/* Modal Top Bar */}
+            <div style={{padding:"48px 16px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",
+              borderBottom:"1px solid rgba(255,255,255,0.08)",background:"rgba(10,10,14,0.95)",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                <motion.button whileTap={{scale:0.88}} onClick={()=>{setPreviewTx(null);setImgZoomed(false);}}
+                  style={{width:34,height:34,borderRadius:10,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                    display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M12 4L4 12M4 4l8 8" stroke={T.text} strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </motion.button>
+                <div style={{minWidth:0}}>
+                  <p style={{margin:0,fontSize:14,fontWeight:800,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    {previewTx.merchant || "Payment Screenshot"}
+                  </p>
+                  <p style={{margin:0,fontSize:11,color:T.textSub}}>
+                    ₹{fmt(previewTx.amount)} · {previewTx.user_name || previewTx.user_email || "User"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action buttons in header */}
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <motion.button whileTap={{scale:0.92}} onClick={()=>setImgZoomed(z=>!z)}
+                  title={imgZoomed ? "Reset zoom" : "Zoom in"}
+                  style={{display:"flex",alignItems:"center",gap:4,padding:"6px 9px",borderRadius:8,
+                    background:imgZoomed ? "rgba(74,158,255,0.3)" : T.glass,
+                    border:`1px solid ${imgZoomed ? T.blue : T.glassBorder}`,
+                    color:imgZoomed ? "#FFF" : T.textSub,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.6"/>
+                    <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    <path d={imgZoomed ? "M5 7h4" : "M7 5v4M5 7h4"} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                  <span>{imgZoomed ? "1x" : "2x"}</span>
+                </motion.button>
+                <motion.button whileTap={{scale:0.92}} onClick={()=>handleDownloadScreenshot(previewTx)}
+                  title="Download Image"
+                  style={{display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:8,
+                    background:"rgba(74,158,255,0.18)",border:"1px solid rgba(74,158,255,0.4)",
+                    color:T.blue,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M2.5 10v3a1 1 0 001 1h9a1 1 0 001-1v-3M8 2v9M4.5 7.5L8 11l3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Save</span>
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Transaction Info Pill Banner */}
+            <div style={{padding:"8px 16px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.05)",
+              display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,fontSize:11,color:T.textMute}}>
+              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{previewTx.user_email}</span>
+              {previewTx.txn_id && <span>Txn: <code style={{color:T.blue}}>{previewTx.txn_id}</code></span>}
+              <span>{timeAgo(previewTx.created_at)}</span>
+            </div>
+
+            {/* Scrollable & Pinch-zoomable image viewport */}
+            <div 
+              onClick={(e)=>{if(e.target === e.currentTarget){setPreviewTx(null);setImgZoomed(false);}}}
+              style={{flex:1,overflow:"auto",display:"flex",alignItems:"center",justifyContent:"center",padding:14,
+                background:"radial-gradient(ellipse at center, rgba(30,30,42,0.6) 0%, rgba(5,5,8,0.98) 100%)",
+                cursor:"zoom-out"}}>
+              <img
+                src={getScreenshotSrc(previewTx.screenshot_url)}
+                alt="Transaction Screenshot"
+                onClick={(e)=>{e.stopPropagation();setImgZoomed(z=>!z);}}
+                style={{
+                  maxWidth:imgZoomed ? "none" : "100%",
+                  maxHeight:imgZoomed ? "none" : "calc(100vh - 200px)",
+                  width:imgZoomed ? "180%" : "auto",
+                  objectFit:"contain",
+                  borderRadius:12,
+                  boxShadow:"0 16px 48px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.12)",
+                  transition:"width 0.2s ease, max-width 0.2s ease",
+                  cursor:imgZoomed ? "zoom-out" : "zoom-in"
+                }}
+              />
+            </div>
+
+            {/* Bottom Footer bar */}
+            <div style={{padding:"12px 16px 28px",borderTop:"1px solid rgba(255,255,255,0.08)",background:"rgba(10,10,14,0.95)",
+              display:"flex",gap:10,flexShrink:0}}>
+              <motion.button whileTap={{scale:0.96}} onClick={()=>handleDownloadScreenshot(previewTx)}
+                style={{flex:1,padding:"11px",borderRadius:12,background:"linear-gradient(135deg,#1A5FC8,#0A3A8A)",
+                  border:"1px solid rgba(74,158,255,0.4)",color:"#FFF",fontSize:13,fontWeight:700,
+                  cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontFamily:"inherit"}}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M2.5 10v3a1 1 0 001 1h9a1 1 0 001-1v-3M8 2v9M4.5 7.5L8 11l3.5-3.5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>Download Screenshot</span>
+              </motion.button>
+              <motion.button whileTap={{scale:0.96}} onClick={()=>handleOpenFullScreenshot(previewTx)}
+                style={{padding:"11px 16px",borderRadius:12,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                  color:T.blue,fontSize:12.5,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"inherit"}}>
+                <span>Full View</span>
+                <span>↗</span>
+              </motion.button>
+              <motion.button whileTap={{scale:0.96}} onClick={()=>{setPreviewTx(null);setImgZoomed(false);}}
+                style={{padding:"11px 16px",borderRadius:12,background:T.glass,border:`1px solid ${T.glassBorder}`,
+                  color:T.textSub,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                Close
+              </motion.button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -5746,7 +5956,7 @@ function FounderDashboard({ onClose, founderPw }) {
                   </motion.a>
 
                   <motion.a whileTap={{ scale: 0.98 }}
-                    href="https://drive.google.com/drive/u/0/my-drive" target="_blank" rel="noopener noreferrer"
+                    href="https://drive.google.com/drive/folders/11xVnc72QGhOO0IeTmJFe7HJ0xxuxVqnb" target="_blank" rel="noopener noreferrer"
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px",
                       borderRadius: 12, background: T.glass, border: `1px solid ${T.glassBorder}`,
@@ -5856,7 +6066,7 @@ function FounderDashboard({ onClose, founderPw }) {
 
                 {syncFeedback && (
                   <div style={{
-                    marginTop: 9, padding: "8px 12px", borderRadius: 9,
+                    marginTop: 9, padding: "10px 12px", borderRadius: 10,
                     background: syncFeedback.type === "success" ? "rgba(16,124,65,0.15)" : "rgba(255,96,88,0.15)",
                     border: `1px solid ${syncFeedback.type === "success" ? "rgba(16,124,65,0.4)" : "rgba(255,96,88,0.4)"}`
                   }}>
@@ -5866,6 +6076,15 @@ function FounderDashboard({ onClose, founderPw }) {
                     }}>
                       {syncFeedback.text}
                     </p>
+                    {syncFeedback.sheetUrl&&(
+                      <a href={syncFeedback.sheetUrl} target="_blank" rel="noopener noreferrer"
+                        style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:8,
+                          padding:"6px 12px",borderRadius:8,background:"#107C41",
+                          color:"#FFF",fontSize:11.5,fontWeight:700,textDecoration:"none"}}>
+                        <span>Open Created Google Sheet</span>
+                        <span>↗</span>
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
@@ -6145,14 +6364,20 @@ function FounderDashboard({ onClose, founderPw }) {
                             </div>
                           </div>
                           {tx.screenshot_url && (
-                            <a href={tx.screenshot_url} target="_blank" rel="noreferrer"
+                            <motion.button whileTap={{ scale: 0.92 }} onClick={() => setPreviewTx(tx)}
                               style={{
-                                fontSize: 10.5, color: T.blue, textDecoration: "none",
-                                display: "inline-block", marginTop: 4,
-                                background: "rgba(74,158,255,0.1)", borderRadius: 5, padding: "2px 8px"
+                                fontSize: 10.5, fontWeight: 700, color: T.blue,
+                                background: "rgba(74,158,255,0.12)", border: "1px solid rgba(74,158,255,0.3)",
+                                borderRadius: 5, padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: 4,
+                                marginTop: 4, cursor: "pointer", fontFamily: "inherit"
                               }}>
-                              View Screenshot ↗
-                            </a>
+                              <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                                <path d="M2 3h12a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.6"/>
+                                <circle cx="5.5" cy="6.5" r="1.5" fill="currentColor"/>
+                                <path d="M15 11l-4-4-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                              </svg>
+                              <span>Screenshot ↗</span>
+                            </motion.button>
                           )}
                         </div>
                       ))
@@ -6258,14 +6483,20 @@ function FounderDashboard({ onClose, founderPw }) {
                           <p style={{ margin: 0, fontSize: 11, color: T.textSub, marginTop: 1 }}>{tx.user_name} · {tx.user_email}</p>
                           <p style={{ margin: "2px 0 0", fontSize: 10.5, color: T.textMute }}>{timeAgo(tx.created_at)}</p>
                           {tx.screenshot_url && (
-                            <a href={tx.screenshot_url} target="_blank" rel="noreferrer"
+                            <motion.button whileTap={{ scale: 0.92 }} onClick={() => setPreviewTx(tx)}
                               style={{
-                                fontSize: 10.5, color: T.blue, textDecoration: "none",
-                                background: "rgba(74,158,255,0.1)", borderRadius: 5,
-                                padding: "2px 8px", display: "inline-block", marginTop: 4
+                                fontSize: 10.5, fontWeight: 700, color: T.blue,
+                                background: "rgba(74,158,255,0.12)", border: "1px solid rgba(74,158,255,0.3)",
+                                borderRadius: 5, padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: 4,
+                                marginTop: 4, cursor: "pointer", fontFamily: "inherit"
                               }}>
-                              Screenshot ↗
-                            </a>
+                              <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                                <path d="M2 3h12a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.6"/>
+                                <circle cx="5.5" cy="6.5" r="1.5" fill="currentColor"/>
+                                <path d="M15 11l-4-4-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                              </svg>
+                              <span>Screenshot ↗</span>
+                            </motion.button>
                           )}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
