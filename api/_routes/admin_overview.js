@@ -15,11 +15,7 @@ export default async function handler(req, res) {
         (SELECT COALESCE(SUM(amount), 0) FROM transactions) AS total_spend,
         (SELECT COALESCE(SUM(COALESCE(base_coins, amount * 0.10, 0)), 0) FROM transactions) AS total_base_coins,
         (SELECT COALESCE(SUM(COALESCE(bonus_coins, 0)), 0) FROM transactions) AS total_bonus_coins,
-        COALESCE(
-          (SELECT SUM(coin_balance) FROM users),
-          (SELECT SUM(COALESCE(total_coins, base_coins, amount * 0.10, 0)) FROM transactions),
-          0
-        ) AS total_coins_issued,
+        (SELECT COALESCE(SUM(COALESCE(total_coins, base_coins, amount * 0.10, 0)), (SELECT SUM(coin_balance) FROM users), 0) FROM transactions) AS total_coins_issued,
         (SELECT COALESCE(AVG(amount), 0) FROM transactions) AS avg_tx_value,
         (SELECT COALESCE(SUM(amount) / NULLIF(COUNT(DISTINCT user_id), 0), 0) FROM transactions) AS avg_spend_per_user,
         (SELECT COUNT(*) FROM transactions WHERE purchase_note IS NOT NULL) AS purchase_submissions,

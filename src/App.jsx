@@ -3181,6 +3181,15 @@ async function apiSaveNote(transactionId, note) {
   return r; // { bonus_awarded, bonus_coins, coin_balance }
 }
 
+async function apiDeleteTx(transactionId) {
+  const r = await apiFetch('/api/transactions', {
+    method: 'DELETE',
+    body: { transactionId },
+  });
+  if (isErr(r)) return { error: true, message: r.message };
+  return r; // { ok: true, deletedId, coin_balance }
+}
+
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 async function apiGetLB() {
   const r = await apiFetch('/api/leaderboard');
@@ -4638,6 +4647,11 @@ function BetaUpload({ profile, onDone, onClose, onAddDetails }) {
     setResult(finalTx);
     setReviewing(false);
     setPhase('success');
+    if (typeof onAddDetails === 'function') {
+      setTimeout(() => {
+        onAddDetails(finalTx.id, finalTx);
+      }, 1000);
+    }
   };
 
   const handleFile = async (e) => {
@@ -5394,7 +5408,7 @@ function FounderDashboard({ onClose, founderPw }) {
   const totalSpend = txns.reduce((s, t) => s + Number(t.amount || 0), 0);
   const sumUserCoins = users.reduce((s, u) => s + Number(u.coin_balance || 0), 0);
   const sumTxnCoins = txns.reduce((s, t) => s + Number(t.total_coins || t.coins || t.base_coins || (Number(t.amount || 0) * 0.10) || 0), 0);
-  const totalCoins = sumUserCoins > 0 ? sumUserCoins : Math.max(Number(data?.overview?.stats?.total_coins_issued || 0), sumTxnCoins);
+  const totalCoins = Math.max(sumTxnCoins, sumUserCoins, Number(data?.overview?.stats?.total_coins_issued || 0));
   const merchantMap = txns.reduce((a, t) => { const m = t.merchant || "Unknown"; a[m] = (a[m] || 0) + 1; return a; }, {});
   const topMerchants = Object.entries(merchantMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
 
@@ -5487,8 +5501,12 @@ function FounderDashboard({ onClose, founderPw }) {
   };
 
   const handleDownloadScreenshot = (tx) => {
-    if (!tx || !tx.screenshot_url) return;
-    const url = String(tx.screenshot_url).trim();
+    if (!tx) return;
+    if (tx.id) {
+      window.open(`/api/admin/screenshot?id=${tx.id}&download=1&founderPw=${encodeURIComponent(founderPw || 'BK11')}`, "_blank");
+      return;
+    }
+    const url = tx.screenshot_url ? String(tx.screenshot_url).trim() : '';
     const safeMerchant = (tx.merchant || "UPI").replace(/[^a-zA-Z0-9]/g, "_");
     const filename = `Paymint_${safeMerchant}_${tx.txn_id || tx.id || 'screenshot'}.jpg`;
 
@@ -5529,31 +5547,17 @@ function FounderDashboard({ onClose, founderPw }) {
   };
 
   const handleOpenFullScreenshot = (tx) => {
-    if (!tx || !tx.screenshot_url) return;
-    const url = String(tx.screenshot_url).trim();
+    if (!tx) return;
+    const url = tx.screenshot_url ? String(tx.screenshot_url).trim() : '';
     if (url.startsWith("http://") || url.startsWith("https://")) {
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
-    try {
-      const parts = url.split(",");
-      const byteString = atob(parts[1] || parts[0]);
-      const mime = parts[0]?.match(/:(.*?);/)?.[1] || "image/jpeg";
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-      }
-      const blob = new Blob([ab], { type: mime });
-      const blobUrl = URL.createObjectURL(blob);
-      const win = window.open(blobUrl, "_blank");
-      if (!win) {
-        handleDownloadScreenshot(tx);
-      }
-    } catch (e) {
-      console.error("Failed to open screenshot full view:", e);
-      handleDownloadScreenshot(tx);
+    if (tx.id) {
+      window.open(`/api/admin/screenshot?id=${tx.id}&founderPw=${encodeURIComponent(founderPw || 'BK11')}`, "_blank", "noopener,noreferrer");
+      return;
     }
+    handleDownloadScreenshot(tx);
   };
 
   // ── MULTI-SHEET EXPORT HELPERS ──────────────────────────────────────────────
@@ -5885,7 +5889,7 @@ function FounderDashboard({ onClose, founderPw }) {
                 background:"radial-gradient(ellipse at center, rgba(30,30,42,0.6) 0%, rgba(5,5,8,0.98) 100%)",
                 cursor:"zoom-out"}}>
               <img
-                src={getScreenshotSrc(previewTx.screenshot_url)}
+                src={getScreenshotSrc(previewTx.screenshot_url || `/api/admin/screenshot?id=${previewTx.id}&founderPw=${encodeURIComponent(founderPw || 'BK11')}`)}
                 alt="Transaction Screenshot"
                 onClick={(e)=>{e.stopPropagation();setImgZoomed(z=>!z);}}
                 style={{
@@ -6740,14 +6744,39 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
     return () => clearTimeout(t);
   }, [notif]);
 
+  const handleDeleteTx = async (txId) => {
+    if (!window.confirm("Are you sure you want to delete this transaction?")) return;
+    try {
+      const res = await apiDeleteTx(txId);
+      if (res && res.error) {
+        showNotif({ type: "error", title: "Delete Failed", sub: res.message || "Could not delete transaction." });
+        return;
+      }
+      const newTxns = txns.filter(t => String(t.id) !== String(txId));
+      setTxns(newTxns);
+      if (res && res.coin_balance !== undefined) {
+        setCoins(res.coin_balance);
+        const up = { ...profile, coin_balance: res.coin_balance };
+        await lc.set("beta-profile", up);
+        onUpdateProfile(up);
+      }
+      await lc.set("beta-txns-" + profile.email, newTxns);
+      showNotif({ type: "redeem", title: "Transaction Deleted", sub: "Transaction removed successfully." });
+    } catch (err) {
+      console.error("[handleDeleteTx]", err);
+      showNotif({ type: "error", title: "Delete Failed", sub: "Could not delete transaction." });
+    }
+  };
+
   const handleSavePurchase = async () => {
     if (!purchaseNote.trim() || savingNote) return;
     setSavingNote(true);
     try {
       const txId = purchaseInputTxId;
       const note = purchaseNote.trim();
-      const bonus = bonusPendingTxIds[txId];
-      const already = txns.find(t => t.id === txId)?.bonus_claimed;
+      const targetTx = txns.find(t => String(t.id) === String(txId));
+      const bonus = bonusPendingTxIds[txId] || (targetTx?.amount ? parseFloat((Number(targetTx.amount) * 0.05).toFixed(1)) : 0);
+      const already = targetTx?.bonus_claimed;
       const eligible = !!bonus && !already;
       console.log("[PURCHASE] txId:", txId, "bonus eligible:", eligible, "bonus:", bonus);
 
@@ -6767,14 +6796,14 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
       }
 
       setTxns(prev => prev.map(t =>
-        t.id === txId ? { ...t, purchase_note: note, bonus_claimed: eligible || !!t.bonus_claimed } : t
+        String(t.id) === String(txId) ? { ...t, purchase_note: note, bonus_claimed: eligible || !!t.bonus_claimed } : t
       ));
       setPurchasePendingTxIds(prev => { const n = { ...prev }; delete n[txId]; return n; });
       setBonusPendingTxIds(prev => { const n = { ...prev }; delete n[txId]; return n; });
       try {
         const cached = await lc.get("beta-txns-" + profile.email);
         if (cached) await lc.set("beta-txns-" + profile.email,
-          cached.map(t => t.id === txId ? { ...t, purchase_note: note, bonus_claimed: eligible || !!t.bonus_claimed } : t));
+          cached.map(t => String(t.id) === String(txId) ? { ...t, purchase_note: note, bonus_claimed: eligible || !!t.bonus_claimed } : t));
       } catch (e) { }
       setPurchaseInputTxId(null);
       setPurchaseNote("");
@@ -7074,7 +7103,7 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
               </div>
               <div style={{ padding: "10px 20px 20px" }}>
                 {(() => {
-                  const currentTx = txns.find(t => t.id === purchaseInputTxId);
+                  const currentTx = txns.find(t => String(t.id) === String(purchaseInputTxId));
                   const bonAmt = bonusPendingTxIds[purchaseInputTxId] || (currentTx?.amount ? parseFloat((Number(currentTx.amount) * 0.05).toFixed(1)) : null);
                   const isEdit = !!currentTx?.purchase_note;
                   return (<>
@@ -7215,11 +7244,11 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                 {/* Purchase Note Edit Field */}
                 <div style={{ marginBottom: 14 }}>
                   <p style={{ margin: "0 0 5px", fontSize: 11, color: T.textMute, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Purchase Description / Note
+                    What items did you purchase?
                   </p>
-                  <input value={purchaseNote} onChange={e => setPurchaseNote(e.target.value)}
+                  <input autoFocus value={purchaseNote} onChange={e => setPurchaseNote(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleSavePurchase()}
-                    placeholder="e.g. Category: Food · Platform: Swiggy · Type: Personal"
+                    placeholder="e.g. Groceries, Pizza & Coke, Swiggy order, Medicine..."
                     style={{
                       width: "100%", padding: "12px 14px", borderRadius: 12,
                       border: `1px solid ${purchaseNote.trim() ? T.blue : T.glassBorder}`,
@@ -7245,7 +7274,7 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6
                   }}>
                   {savingNote ? "Saving details…" : (() => {
-                    const currentTx = txns.find(t => t.id === purchaseInputTxId);
+                    const currentTx = txns.find(t => String(t.id) === String(purchaseInputTxId));
                     const b = bonusPendingTxIds[purchaseInputTxId] || (currentTx?.amount ? parseFloat((Number(currentTx.amount) * 0.05).toFixed(1)) : null);
                     return b ? `Claim +${b} Extra Coins (5%) →` : "Save Purchase Details";
                   })()}
@@ -7499,8 +7528,21 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                         }}>{tx.purchase_note}</p>}
                       </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
+                      <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
+                          <motion.button whileTap={{ scale: 0.88 }}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
+                            title="Delete transaction"
+                            style={{
+                              background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
+                              borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
+                              fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
+                              justifyContent: "center", padding: 0
+                            }}>
+                            ✕
+                          </motion.button>
+                        </div>
                         <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: T.gold }}>+{tx.coins} coins</p>
                       </div>
                     </div>
@@ -7613,15 +7655,28 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                           <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
                           <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: T.gold }}>+{tx.coins}</p>
-                          <motion.button whileTap={{ scale: 0.9 }}
-                            onClick={() => { setPurchaseInputTxId(tx.id); setPurchaseNote(tx.purchase_note || ""); }}
-                            style={{
-                              marginTop: 4, background: "none", border: "none", cursor: "pointer", padding: 0,
-                              fontSize: 10.5, fontWeight: 600, fontFamily: "inherit",
-                              color: tx.purchase_note ? T.textMute : T.blue
-                            }}>
-                            {tx.purchase_note ? "Edit" : "+ Add"}
-                          </motion.button>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, justifyContent: "flex-end" }}>
+                            <motion.button whileTap={{ scale: 0.9 }}
+                              onClick={() => { setPurchaseInputTxId(tx.id); setPurchaseNote(tx.purchase_note || ""); }}
+                              style={{
+                                background: "none", border: "none", cursor: "pointer", padding: 0,
+                                fontSize: 10.5, fontWeight: 600, fontFamily: "inherit",
+                                color: tx.purchase_note ? T.textMute : T.blue
+                              }}>
+                              {tx.purchase_note ? "Edit" : "+ Add"}
+                            </motion.button>
+                            <motion.button whileTap={{ scale: 0.88 }}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
+                              title="Delete transaction"
+                              style={{
+                                background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
+                                borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
+                                fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
+                                justifyContent: "center", padding: 0
+                              }}>
+                              ✕
+                            </motion.button>
+                          </div>
                         </div>
                       </div>
                     </div>
