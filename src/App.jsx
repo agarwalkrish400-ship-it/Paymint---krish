@@ -6604,10 +6604,17 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
   const [purchaseInputTxId, setPurchaseInputTxId] = useState(null);
   const [purchaseNote, setPurchaseNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
-  const [founderOpen, setFounderOpen] = useState(false);
+  const [founderOpen, setFounderOpen] = useState(() => {
+    try { return window.location.search.includes('founder') || window.location.hash.includes('founder'); } catch { return false; }
+  });
   const [showPwModal, setShowPwModal] = useState(false);
   const [pw, setPw] = useState("");
-  const [founderPw, setFounderPw] = useState("");
+  const [founderPw, setFounderPw] = useState(() => {
+    try {
+      const u = new URLSearchParams(window.location.search);
+      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '');
+    } catch { return ''; }
+  });
   const [pwErr, setPwErr] = useState("");
   const tapCount = useRef(0);
   const tapTimer = useRef(null);
@@ -8400,10 +8407,17 @@ export default function Paymint() {
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
   // Global 5-tap founder state
-  const [founderOpen, setFounderOpen] = useState(false);
+  const [founderOpen, setFounderOpen] = useState(() => {
+    try { return window.location.search.includes('founder') || window.location.hash.includes('founder'); } catch { return false; }
+  });
   const [showPwModal, setShowPwModal] = useState(false);
   const [pw, setPw] = useState("");
-  const [founderPw, setFounderPw] = useState("");
+  const [founderPw, setFounderPw] = useState(() => {
+    try {
+      const u = new URLSearchParams(window.location.search);
+      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '');
+    } catch { return ''; }
+  });
   const [pwErr, setPwErr] = useState("");
   const tapCount = useRef(0);
   const tapTimer = useRef(null);
