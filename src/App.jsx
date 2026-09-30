@@ -4082,6 +4082,11 @@ function verifyUpiUtrJulianDate(utr, dateStr) {
   const utrYearDigit = parseInt(cleanUtr[0]);
   const utrJulianDay = parseInt(cleanUtr.slice(1, 4));
 
+  // If day code is outside 1-366, it is an app-specific transaction ID (e.g. BHIM 1417..., Paytm, Cred) rather than an NPCI Julian UTR
+  if (isNaN(utrJulianDay) || utrJulianDay < 1 || utrJulianDay > 366) {
+    return { valid: true, skipped: true, reason: 'non-Julian transaction reference format' };
+  }
+
   let targetDate = new Date();
   if (dateStr) {
     const p = new Date(dateStr);
@@ -4152,12 +4157,21 @@ function verifyImageFileMetadata(fileName) {
 function detectPaymentDirection(text) {
   const t = text.toLowerCase();
 
-  // Definitive Incoming (NEVER appears on genuine outgoing payment receipts)
-  const definitiveIncoming = /(?:received\s+from|payment\s+received|money\s+received|you(?:\s*have)?\s+received|received\s*(?:₹|rs\.?|inr)|amount\s+received|funds?\s+received|received\s+into|received\s+in\s+bank|sender\s*:|remitter\s*(?:name|upi|vpa)?\s*:?|inward\s+(?:upi|payment|transaction|remittance)|cashback\s+(?:received|credited)|refund\s+(?:received|credited|from)|credited\s+to\s+your\s+(?:account|bank|wallet|a\/c)|your\s+account\s+has\s+been\s+credited)/i;
+  // If "payment received by" or "received by [merchant/store/business]", it's outgoing confirmation!
+  const cleanedForIncoming = text.replace(/(?:payment\s+)?received\s+by\s+[A-Za-z0-9\s&._@-]{2,60}/gi, '');
 
-  const mDef = text.match(definitiveIncoming);
+  // Definitive Incoming (NEVER appears on genuine outgoing payment receipts)
+  const definitiveIncoming = /(?:received\s+from|payment\s+received\s+from|money\s+received\s+from|you(?:\s*have)?\s+received|received\s*(?:₹|rs\.?|inr)|amount\s+received|funds?\s+received|received\s+into|received\s+in\s+bank|sender\s*:|remitter\s*(?:name|upi|vpa)?\s*:?|inward\s+(?:upi|payment|transaction|remittance)|cashback\s+(?:received|credited)|refund\s+(?:received|credited|from)|credited\s+to\s+your\s+(?:account|bank|wallet|a\/c)|your\s+account\s+has\s+been\s+credited)/i;
+
+  const mDef = cleanedForIncoming.match(definitiveIncoming);
   if (mDef) {
     return { direction: 'incoming', isReceived: true, match: mDef[0] };
+  }
+
+  // Also standalone "payment received" if NOT followed by "by"
+  const mStandAloneReceived = text.match(/(?:payment\s+received|money\s+received)(?!\s+by\b)/i);
+  if (mStandAloneReceived) {
+    return { direction: 'incoming', isReceived: true, match: mStandAloneReceived[0] };
   }
 
   // General Incoming checks
@@ -4170,14 +4184,18 @@ function detectPaymentDirection(text) {
   // Outgoing checks
   const outgoingPatterns = [
     /\bpaid\s+to\b/i,
+    /\bpaid\s*₹/i,
+    /\bpaid\b/i,
     /\bpayment\s+to\b/i,
     /\bsent\s+to\b/i,
     /\bmoney\s+sent\b/i,
     /\btransferred\s+to\b/i,
+    /\bpayment\s+transferred\b/i,
     /\bpaying\s+to\b/i,
     /\bpaid\s+successfully\b/i,
     /\bdebited\s+from\b/i,
     /\baccount\s+debited\b/i,
+    /\bdebited\s+account\b/i,
     /\bdebit\s+alert\b/i,
     /\bdebit\s+from\b/i,
     /\bbill\s+paid\b/i,
@@ -4185,7 +4203,7 @@ function detectPaymentDirection(text) {
   ];
 
   const hasOutgoing = outgoingPatterns.some(p => p.test(text));
-  const hasIncoming = incomingPatterns.some(p => p.test(text));
+  const hasIncoming = incomingPatterns.some(p => p.test(cleanedForIncoming));
 
   if (hasIncoming && !hasOutgoing) {
     return { direction: 'incoming', isReceived: true, match: 'credited without outgoing context' };
@@ -4399,9 +4417,14 @@ function extractUPIData(text, log) {
   // ── Extract remaining fields using existing logic ──────────────────
   const dirCheck = detectPaymentDirection(t);
   let status = 'success';
-  if (dirCheck.isReceived) status = 'received';
-  else if (/failed|declined|rejected|unsuccessful|could not|timed.?out|expired/i.test(t)) status = 'failed';
-  else if (/pending|processing|in.?progress|initiated/i.test(t)) status = 'pending';
+  if (dirCheck.isReceived) {
+    status = 'received';
+  } else if (/failed|declined|rejected|unsuccessful|could not|timed.?out|expired/i.test(t)) {
+    status = 'failed';
+  } else if (/\b(?:payment\s+pending|transaction\s+pending|payment\s+processing|transaction\s+in\s+progress|payment\s+in\s+progress|awaiting\s+confirmation)\b/i.test(t) ||
+             (/\b(?:pending|processing)\b/i.test(t) && !/\b(?:paid|successful|transferred|completed|debited)\b/i.test(t))) {
+    status = 'pending';
+  }
 
   let app = 'UPI';
   if (/g[o0]{1,2}gle\s*pay|gpay|\btez\b/i.test(t)) app = 'GPay';
@@ -4417,6 +4440,8 @@ function extractUPIData(text, log) {
 
   let merchant = '';
   for (const p of [
+    /(?:banking\s*name)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
+    /(?:payment\s+received\s+by|received\s+by)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
     /(?:paid\s+to|sent\s+to|money\s+sent\s+to|transferred\s+to)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
     /(?:^|\n)\s*To[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
     /(?:to|payee|beneficiary|recipient)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
@@ -4444,18 +4469,26 @@ function extractUPIData(text, log) {
 
   let date = '';
   const mths = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
-  const comboM = t.match(/(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+\d{4})[,\s]+(?:at\s+)?(\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)/i);
+  const comboM = t.match(/(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+\d{2,4})[,\s]+(?:at\s+)?(\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)/i);
 
   for (const { re, fn } of [
     { re: /(\d{4})[-/](\d{2})[-/](\d{2})/, fn: m => `${m[1]}-${m[2]}-${m[3]}` },
     { re: /(\d{2})[-/](\d{2})[-/](\d{4})/, fn: m => `${m[3]}-${m[2]}-${m[1]}` },
     {
-      re: /(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+(\d{4})/i,
-      fn: m => `${m[3]}-${mths[m[2].toLowerCase().slice(0, 3)] || '01'}-${m[1].padStart(2, '0')}`
+      re: /(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+(\d{2,4})/i,
+      fn: m => {
+        let yr = m[3];
+        if (yr.length === 2) yr = '20' + yr;
+        return `${yr}-${mths[m[2].toLowerCase().slice(0, 3)] || '01'}-${m[1].padStart(2, '0')}`;
+      }
     },
     {
-      re: /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+(\d{1,2})[,.]?\s+(\d{4})/i,
-      fn: m => `${m[3]}-${mths[m[1].toLowerCase().slice(0, 3)] || '01'}-${m[2].padStart(2, '0')}`
+      re: /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[,.]?\s+(\d{1,2})(?:st|nd|rd|th)?[,.]?\s+(\d{2,4})/i,
+      fn: m => {
+        let yr = m[3];
+        if (yr.length === 2) yr = '20' + yr;
+        return `${yr}-${mths[m[1].toLowerCase().slice(0, 3)] || '01'}-${m[2].padStart(2, '0')}`;
+      }
     },
   ]) {
     const m = (comboM ? comboM[1] : t).match(re) || t.match(re);
