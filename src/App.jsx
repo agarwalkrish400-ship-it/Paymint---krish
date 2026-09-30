@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { Component, useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogoBadge, RewardStoreView, FounderRewardsTab } from "./RewardsSystem";
 
@@ -4421,9 +4421,19 @@ function extractUPIData(text, log) {
     status = 'received';
   } else if (/failed|declined|rejected|unsuccessful|could not|timed.?out|expired/i.test(t)) {
     status = 'failed';
-  } else if (/\b(?:payment\s+pending|transaction\s+pending|payment\s+processing|transaction\s+in\s+progress|payment\s+in\s+progress|awaiting\s+confirmation)\b/i.test(t) ||
-             (/\b(?:pending|processing)\b/i.test(t) && !/\b(?:paid|successful|transferred|completed|debited)\b/i.test(t))) {
-    status = 'pending';
+  } else {
+    // Check for success confirmation indicators across apps (BHIM, GPay, PhonePe, Paytm)
+    const hasDefinitiveSuccess = /\b(?:paid|successful|transferred|transfer|completed|debited|debit)\b/i.test(t) ||
+                                 /(?:payment\s+)?received\s+by\b/i.test(t);
+
+    // Strip benign UI labels like BHIM's "Process details" before testing for pending/processing status
+    const tWithoutProcessDetails = t.replace(/\bprocess(?:\s+details)?\b/gi, '');
+
+    if (/\b(?:payment\s+pending|transaction\s+pending|awaiting\s+confirmation|pending\s+at\s+bank|waiting\s+for\s+bank)\b/i.test(tWithoutProcessDetails)) {
+      status = 'pending';
+    } else if (/\b(?:payment\s+processing|transaction\s+in\s+progress|payment\s+in\s+progress|pending|processing)\b/i.test(tWithoutProcessDetails) && !hasDefinitiveSuccess) {
+      status = 'pending';
+    }
   }
 
   let app = 'UPI';
@@ -5275,7 +5285,7 @@ function BetaUpload({ profile, onDone, onClose, onAddDetails }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // FOUNDER DASHBOARD
 // ══════════════════════════════════════════════════════════════════════════════
-class ErrorBoundary extends React.Component {
+class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
