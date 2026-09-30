@@ -9,22 +9,21 @@ export default async function handler(req, res) {
     const sql = getDb();
     const [stats] = await sql`
       SELECT
-        COUNT(DISTINCT u.id) AS total_users,
-        COUNT(DISTINCT CASE WHEN u.joined_at>NOW()-INTERVAL '7 days' THEN u.id END) AS new_users_7d,
+        (SELECT COUNT(*) FROM users) AS total_users,
+        (SELECT COUNT(*) FROM users WHERE joined_at > NOW() - INTERVAL '7 days') AS new_users_7d,
         (SELECT COUNT(*) FROM transactions) AS total_transactions,
-        (SELECT COALESCE(SUM(amount),0) FROM transactions) AS total_spend,
-        (SELECT COALESCE(SUM(COALESCE(base_coins, amount * 0.10, 0)),0) FROM transactions) AS total_base_coins,
-        (SELECT COALESCE(SUM(COALESCE(bonus_coins, 0)),0) FROM transactions) AS total_bonus_coins,
-        (SELECT COALESCE(
-          NULLIF(SUM(COALESCE(total_coins, base_coins, amount * 0.10, 0)), 0),
+        (SELECT COALESCE(SUM(amount), 0) FROM transactions) AS total_spend,
+        (SELECT COALESCE(SUM(COALESCE(base_coins, amount * 0.10, 0)), 0) FROM transactions) AS total_base_coins,
+        (SELECT COALESCE(SUM(COALESCE(bonus_coins, 0)), 0) FROM transactions) AS total_bonus_coins,
+        COALESCE(
+          (SELECT SUM(COALESCE(total_coins, base_coins, amount * 0.10, 0)) FROM transactions),
           (SELECT SUM(coin_balance) FROM users),
           0
-        ) FROM transactions) AS total_coins_issued,
-        (SELECT COALESCE(AVG(amount),0) FROM transactions) AS avg_tx_value,
-        (SELECT COALESCE(SUM(amount)/NULLIF(COUNT(DISTINCT user_id),0),0) FROM transactions) AS avg_spend_per_user,
-        (SELECT COUNT(CASE WHEN purchase_note IS NOT NULL THEN 1 END) FROM transactions) AS purchase_submissions,
-        (SELECT COUNT(CASE WHEN bonus_claimed=true THEN 1 END) FROM transactions) AS bonus_claims
-      FROM users u`;
+        ) AS total_coins_issued,
+        (SELECT COALESCE(AVG(amount), 0) FROM transactions) AS avg_tx_value,
+        (SELECT COALESCE(SUM(amount) / NULLIF(COUNT(DISTINCT user_id), 0), 0) FROM transactions) AS avg_spend_per_user,
+        (SELECT COUNT(*) FROM transactions WHERE purchase_note IS NOT NULL) AS purchase_submissions,
+        (SELECT COUNT(*) FROM transactions WHERE bonus_claimed = true) AS bonus_claims`;
     const topMerchants = await sql`SELECT merchant,COUNT(*) AS tx_count,SUM(amount) AS total_amount FROM transactions GROUP BY merchant ORDER BY tx_count DESC LIMIT 10`;
     const topSpenders  = await sql`SELECT u.name,u.email,u.occupation,COUNT(t.id) AS tx_count,COALESCE(SUM(t.amount),0) AS total_spent,u.coin_balance,u.base_coins,u.bonus_coins FROM users u LEFT JOIN transactions t ON t.user_id=u.id GROUP BY u.id ORDER BY total_spent DESC NULLS LAST LIMIT 10`;
     const trend        = await sql`SELECT DATE(created_at) AS day,COUNT(*) AS tx_count,SUM(amount) AS total_amount,SUM(COALESCE(total_coins, base_coins, amount * 0.10, 0)) AS coins_issued FROM transactions WHERE created_at>NOW()-INTERVAL '14 days' GROUP BY DATE(created_at) ORDER BY day ASC`;
