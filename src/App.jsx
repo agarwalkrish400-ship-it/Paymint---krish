@@ -5347,7 +5347,9 @@ function FounderDashboard({ onClose, founderPw }) {
     u.occupation?.toLowerCase().includes(search.toLowerCase())
   );
   const totalSpend = txns.reduce((s, t) => s + Number(t.amount || 0), 0);
-  const totalCoins = (data?.overview?.stats?.total_coins_issued != null) ? Number(data.overview.stats.total_coins_issued) : txns.reduce((s, t) => s + Number(t.total_coins || t.coins || t.base_coins || (Number(t.amount || 0) * 0.10) || 0), 0);
+  const sumUserCoins = users.reduce((s, u) => s + Number(u.coin_balance || u.total_coins_earned || 0), 0);
+  const sumTxnCoins = txns.reduce((s, t) => s + Number(t.total_coins || t.coins || t.base_coins || (Number(t.amount || 0) * 0.10) || 0), 0);
+  const totalCoins = Math.max(Number(data?.overview?.stats?.total_coins_issued || 0), sumTxnCoins, sumUserCoins);
   const merchantMap = txns.reduce((a, t) => { const m = t.merchant || "Unknown"; a[m] = (a[m] || 0) + 1; return a; }, {});
   const topMerchants = Object.entries(merchantMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
 
@@ -6575,7 +6577,6 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
       const newTxns = [newTx, ...txns];
       setTxns(newTxns);
       setCoins(serverBalance);
-      setUploadOpen(false);
 
       // 5. Update localStorage cache
       const up = { ...profile, coin_balance: serverBalance };
