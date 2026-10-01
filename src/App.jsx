@@ -4081,8 +4081,11 @@ function getJulianDay(date) {
   return Math.floor(diff / oneDay);
 }
 
-function verifyUpiUtrJulianDate(utr, dateStr) {
+function verifyUpiUtrJulianDate(utr, dateStr, app) {
   if (!utr || typeof utr !== 'string') return { valid: true, skipped: true };
+  if (app && /bhim/i.test(app)) {
+    return { valid: true, skipped: true, reason: 'BHIM transaction ID is an internal order reference' };
+  }
   const cleanUtr = utr.trim().replace(/\s+/g, '');
   if (!/^\d{12}$/.test(cleanUtr)) {
     return { valid: true, skipped: true, reason: 'non-12-digit UTR' };
@@ -4169,6 +4172,18 @@ function detectPaymentDirection(text) {
   // If "payment received by" or "received by [merchant/store/business]", it's outgoing confirmation!
   const cleanedForIncoming = text.replace(/(?:payment\s+)?received\s+by\s+[A-Za-z0-9\s&._@-]{2,60}/gi, '');
 
+  // Strong outgoing indicators that NEVER appear on genuine incoming payment receipts
+  const strongOutgoingPatterns = [
+    /\bdebited\s+account\b/i,
+    /\bdebited\s+from\b/i,
+    /\baccount\s+debited\b/i,
+    /\bpayment\s+transferred\s+from\b/i,
+    /\btransferred\s+from\s+[A-Za-z0-9\s.'-]+?'s\s+account\b/i,
+    /\bsplit\s+this\s+expense\b/i,
+    /\bto\s+upi\s+id\b/i,
+  ];
+  const hasStrongOutgoing = strongOutgoingPatterns.some(p => p.test(text));
+
   // Definitive Incoming (NEVER appears on genuine outgoing payment receipts)
   const definitiveIncoming = /(?:received\s+from|payment\s+received\s+from|money\s+received\s+from|you(?:\s*have)?\s+received|received\s*(?:₹|rs\.?|inr)|amount\s+received|funds?\s+received|received\s+into|received\s+in\s+bank|sender\s*:|remitter\s*(?:name|upi|vpa)?\s*:?|inward\s+(?:upi|payment|transaction|remittance)|cashback\s+(?:received|credited)|refund\s+(?:received|credited|from)|credited\s+to\s+your\s+(?:account|bank|wallet|a\/c)|your\s+account\s+has\s+been\s+credited)/i;
 
@@ -4177,9 +4192,9 @@ function detectPaymentDirection(text) {
     return { direction: 'incoming', isReceived: true, match: mDef[0] };
   }
 
-  // Also standalone "payment received" if NOT followed by "by"
+  // Also standalone "payment received" if NOT accompanied by strong outgoing evidence
   const mStandAloneReceived = text.match(/(?:payment\s+received|money\s+received)(?!\s+by\b)/i);
-  if (mStandAloneReceived) {
+  if (mStandAloneReceived && !hasStrongOutgoing) {
     return { direction: 'incoming', isReceived: true, match: mStandAloneReceived[0] };
   }
 
@@ -4211,7 +4226,7 @@ function detectPaymentDirection(text) {
     /\brecharge\s+successful\b/i,
   ];
 
-  const hasOutgoing = outgoingPatterns.some(p => p.test(text));
+  const hasOutgoing = hasStrongOutgoing || outgoingPatterns.some(p => p.test(text));
   const hasIncoming = incomingPatterns.some(p => p.test(cleanedForIncoming));
 
   if (hasIncoming && !hasOutgoing) {
@@ -4446,10 +4461,10 @@ function extractUPIData(text, log) {
   }
 
   let app = 'UPI';
-  if (/g[o0]{1,2}gle\s*pay|gpay|\btez\b/i.test(t)) app = 'GPay';
+  if (/\bbhim\b|bharat'?s\s+own\s+payments\s+app|bharat\s+interface\s+for\s+money/i.test(t)) app = 'BHIM';
+  else if (/g[o0]{1,2}gle\s*pay|gpay|\btez\b/i.test(t)) app = 'GPay';
   else if (/ph[o0]ne\s*pe|phonepe/i.test(t)) app = 'PhonePe';
   else if (/paytm/i.test(t)) app = 'Paytm';
-  else if (/\bbhim\b/i.test(t)) app = 'BHIM';
   else if (/amazon\s*pay/i.test(t)) app = 'Amazon Pay';
   else if (/\byono\b|state\s*bank/i.test(t)) app = 'SBI';
   else if (/\bhdfc\b/i.test(t)) app = 'HDFC';
@@ -4459,12 +4474,12 @@ function extractUPIData(text, log) {
 
   let merchant = '';
   for (const p of [
-    /(?:banking\s*name)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
-    /(?:payment\s+received\s+by|received\s+by)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
-    /(?:paid\s+to|sent\s+to|money\s+sent\s+to|transferred\s+to)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
-    /(?:^|\n)\s*To[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
-    /(?:to|payee|beneficiary|recipient)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
-    /(?:merchant|vendor|store)[:\s]+([A-Za-z0-9\s&._@-]{2,50})/i,
+    /(?:banking\s*name)\s*[:\-]?\s*\n?\s*([A-Za-z0-9\s&._@'/-]{2,50})/i,
+    /(?:payment\s+received\s+by|received\s+by)\s*[:\-]?\s*\n?\s*([A-Za-z0-9\s&._@'/-]{2,50})/i,
+    /(?:paid\s+to|sent\s+to|money\s+sent\s+to|transferred\s+to)\s*[:\-]?\s*\n?\s*([A-Za-z0-9\s&._@'/-]{2,50})/i,
+    /(?:^|\n)\s*To[:\s]+([A-Za-z0-9\s&._@'/-]{2,50})/i,
+    /(?:to|payee|beneficiary|recipient)[:\s]+([A-Za-z0-9\s&._@'/-]{2,50})/i,
+    /(?:merchant|vendor|store)[:\s]+([A-Za-z0-9\s&._@'/-]{2,50})/i,
   ]) {
     const m = t.match(p);
     if (m) {
@@ -4476,6 +4491,48 @@ function extractUPIData(text, log) {
       }
     }
   }
+
+  // Sender
+  let sender = '';
+  const senderM = t.match(/(?:payment\s+transferred\s+from|payment\s+initiated\s+by)\s+([A-Za-z\s.'-]+?)(?:'s\s+account|\n|\r|$)/i);
+  if (senderM) sender = senderM[1].trim();
+
+  // To UPI ID
+  let toUpiId = '';
+  const toUpiM = t.match(/(?:to\s+upi\s+id|payee\s+upi|to\s+vpa)\s*[:\-]?\s*\n?\s*([a-zA-Z0-9*.\-_@\s]+)/i);
+  if (toUpiM) {
+    const raw = toUpiM[1].split(/[\n\r]/)[0].trim();
+    if (raw.includes('@')) toUpiId = raw.replace(/\s+/g, '');
+  }
+
+  // From UPI ID
+  let fromUpiId = '';
+  const fromUpiM = t.match(/(?:from\s+upi\s+id|sender\s+upi|from\s+vpa)\s*[:\-]?\s*\n?\s*([a-zA-Z0-9*.\-_@\s]+)/i);
+  if (fromUpiM) {
+    const raw = fromUpiM[1].split(/[\n\r]/)[0].trim();
+    if (raw.includes('@')) fromUpiId = raw.replace(/\s+/g, '');
+  }
+
+  // Debited account / Bank
+  let debitedAccount = '';
+  const debAccM = t.match(/(?:debited\s+account|from\s+account|debited\s+from)\s*[:\-]?\s*\n?\s*([^\n\r]+)/i);
+  if (debAccM) debitedAccount = debAccM[1].trim().slice(0, 40);
+
+  let bank = debitedAccount;
+  if (!bank) {
+    const bM = t.match(/(?:punjab\s+national\s+bank|sbi|state\s+bank|hdfc|icici|axis|kotak|pnb|bob|bank\s+of\s+baroda|union\s+bank|yes\s+bank|idbi|federal|canara|au\s+small\s+finance)[^\n]*/i);
+    if (bM) bank = bM[0].trim().slice(0, 30);
+  }
+
+  // Payment Instrument
+  let paymentInstrument = '';
+  const instM = t.match(/(?:payment\s+instrument)\s*[:\-]?\s*\n?\s*([^\n\r]+)/i);
+  if (instM) paymentInstrument = instM[1].trim();
+
+  // Payment Mode
+  let paymentMode = '';
+  const modeM = t.match(/(?:payment\s+mode)\s*[:\-]?\s*\n?\s*([^\n\r]+)/i);
+  if (modeM) paymentMode = modeM[1].trim();
 
   let txnId = '';
   for (const p of [
@@ -4544,10 +4601,6 @@ function extractUPIData(text, log) {
     }
   }
 
-  let bank = '';
-  const bM = t.match(/(?:sbi|state bank|hdfc|icici|axis|kotak|pnb|bob|union bank|yes bank|idbi|federal|canara|au small finance)[^\n]*/i);
-  if (bM) bank = bM[0].trim().slice(0, 30);
-
   // Confidence scoring for non-amount fields
   if (!merchant) { confidence -= 20; missing.push('merchant'); }
   if (!date) { confidence -= 15; missing.push('date'); }
@@ -4558,7 +4611,10 @@ function extractUPIData(text, log) {
 
   return {
     amount, status, app, merchant: merchant || 'UPI Payment',
-    txnId, date, time, bank, confidence, missingFields: missing,
+    recipient: merchant || 'UPI Payment',
+    sender, txnId, date, time, bank, toUpiId, fromUpiId,
+    paymentInstrument, paymentMode,
+    confidence, missingFields: missing,
     direction: dirCheck.direction, isReceived: dirCheck.isReceived, directionReason: dirCheck.match
   };
 }
@@ -4592,7 +4648,7 @@ function BetaUpload({ profile, onDone, onClose, onAddDetails }) {
       return;
     }
     if (parsed.txnId) {
-      const utrCheck = verifyUpiUtrJulianDate(parsed.txnId, parsed.date);
+      const utrCheck = verifyUpiUtrJulianDate(parsed.txnId, parsed.date, parsed.app);
       if (!utrCheck.valid) {
         log('REJECTED UTR in finaliseTx: ' + utrCheck.reason);
         setPhase('error');
@@ -4622,6 +4678,12 @@ function BetaUpload({ profile, onDone, onClose, onAddDetails }) {
       time: parsed.time || '',
       app: parsed.app || 'UPI',
       bank: parsed.bank || '',
+      sender: parsed.sender || '',
+      recipient: parsed.recipient || parsed.merchant || '',
+      toUpiId: parsed.toUpiId || '',
+      fromUpiId: parsed.fromUpiId || '',
+      paymentInstrument: parsed.paymentInstrument || '',
+      paymentMode: parsed.paymentMode || '',
       ts: new Date().toISOString(),
     };
     log('Finalising tx:', JSON.stringify(tx));
@@ -4823,7 +4885,7 @@ function BetaUpload({ profile, onDone, onClose, onAddDetails }) {
 
     // STEP 5c: Anti-Tamper Validations (UTR Julian day & Status bar clock cross-check)
     if (extracted.txnId) {
-      const utrCheck = verifyUpiUtrJulianDate(extracted.txnId, extracted.date);
+      const utrCheck = verifyUpiUtrJulianDate(extracted.txnId, extracted.date, extracted.app);
       if (!utrCheck.valid) {
         log('REJECTED UTR check:', utrCheck.reason);
         setPhase('error');
@@ -6822,7 +6884,7 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
       }
       // Anti-tamper UTR check in handleTx
       if (tx.txnId) {
-        const utrCheck = verifyUpiUtrJulianDate(tx.txnId, tx.date);
+        const utrCheck = verifyUpiUtrJulianDate(tx.txnId, tx.date, tx.app);
         if (!utrCheck.valid) {
           showNotif({ type: 'error', title: 'Verification Failed', sub: utrCheck.reason });
           return { error: true, message: utrCheck.reason };

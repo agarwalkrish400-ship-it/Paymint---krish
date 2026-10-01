@@ -72,37 +72,41 @@ export default async function handler(req, res) {
 
             // 0b. NPCI UTR Julian Day & Year Validation
       if (txnId && typeof txnId === 'string') {
+        const isBhim = paymentApp && /bhim/i.test(paymentApp);
         const cleanUtr = txnId.trim().replace(/\s+/g, '');
-        if (/^\d{12}$/.test(cleanUtr)) {
+        if (!isBhim && /^\d{12}$/.test(cleanUtr)) {
           const utrYearDigit = parseInt(cleanUtr[0]);
           const utrJulianDay = parseInt(cleanUtr.slice(1, 4));
 
-          let targetDate = new Date();
-          if (txnDate && typeof txnDate === 'string' && txnDate.trim()) {
-            const p = new Date(txnDate.trim());
-            if (!isNaN(p.getTime())) targetDate = p;
-          }
+          // If day code is outside 1-366, it is an app-specific transaction ID rather than an NPCI Julian UTR
+          if (!isNaN(utrJulianDay) && utrJulianDay >= 1 && utrJulianDay <= 366) {
+            let targetDate = new Date();
+            if (txnDate && typeof txnDate === 'string' && txnDate.trim()) {
+              const p = new Date(txnDate.trim());
+              if (!isNaN(p.getTime())) targetDate = p;
+            }
 
-          const startOfYear = new Date(targetDate.getFullYear(), 0, 0);
-          const diffMs = (targetDate - startOfYear) + ((startOfYear.getTimezoneOffset() - targetDate.getTimezoneOffset()) * 60 * 1000);
-          const expectedJulianDay = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-          const expectedYearDigit = targetDate.getFullYear() % 10;
+            const startOfYear = new Date(targetDate.getFullYear(), 0, 0);
+            const diffMs = (targetDate - startOfYear) + ((startOfYear.getTimezoneOffset() - targetDate.getTimezoneOffset()) * 60 * 1000);
+            const expectedJulianDay = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const expectedYearDigit = targetDate.getFullYear() % 10;
 
-          const yearDiff = Math.abs(utrYearDigit - expectedYearDigit);
-          const dayDiff = Math.abs(utrJulianDay - expectedJulianDay);
+            const yearDiff = Math.abs(utrYearDigit - expectedYearDigit);
+            const dayDiff = Math.abs(utrJulianDay - expectedJulianDay);
 
-          if (yearDiff !== 0 && !(yearDiff === 1 && (expectedJulianDay <= 2 || expectedJulianDay >= 364))) {
-            return res.status(400).json({
-              error: 'invalid_utr_reference',
-              message: 'Invalid UPI Reference ID (UTR). The reference number does not match the payment receipt year.'
-            });
-          }
+            if (yearDiff !== 0 && !(yearDiff === 1 && (expectedJulianDay <= 2 || expectedJulianDay >= 364))) {
+              return res.status(400).json({
+                error: 'invalid_utr_reference',
+                message: 'Invalid UPI Reference ID (UTR). The reference number does not match the payment receipt year.'
+              });
+            }
 
-          if (dayDiff > 2 && dayDiff < 363) {
-            return res.status(400).json({
-              error: 'invalid_utr_reference',
-              message: 'Invalid UPI Reference ID (UTR). The reference number date code contradicts the payment date.'
-            });
+            if (dayDiff > 2 && dayDiff < 363) {
+              return res.status(400).json({
+                error: 'invalid_utr_reference',
+                message: 'Invalid UPI Reference ID (UTR). The reference number date code contradicts the payment date.'
+              });
+            }
           }
         }
       }
