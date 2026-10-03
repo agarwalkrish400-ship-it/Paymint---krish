@@ -7219,6 +7219,18 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                   </>);
                 })()}
 
+                {/* Instruction / Disclaimer */}
+                <p style={{
+                  margin: "0 0 13px",
+                  fontSize: 12,
+                  color: "rgba(242,242,247,0.65)",
+                  fontWeight: 500,
+                  letterSpacing: "0.01em",
+                  lineHeight: 1.35
+                }}>
+                  Select 1 option in each category to continue.
+                </p>
+
                 {/* 1. Category / Item Tags */}
                 <div style={{ marginBottom: 14 }}>
                   <p style={{ margin: "0 0 6px", fontSize: 11.5, fontWeight: 700, color: T.blue, letterSpacing: "0.03em", textTransform: "uppercase" }}>
@@ -7229,24 +7241,30 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                       "🍕 Food & Dining", "🛒 Groceries", "🛍️ Shopping",
                       "☕ Coffee / Snacks", "🚕 Cab & Travel", "📱 Bills & Recharge",
                       "🎬 Movies & Fun", "💊 Pharmacy", "⚡ Electronics", "📦 Other"
-                    ].map(tag => (
-                      <motion.button key={tag} whileTap={{ scale: 0.94 }}
-                        onClick={() => {
-                          const cleanTag = tag.replace(/^[^\w\s/]+/, "").trim();
-                          setPurchaseNote(prev => {
-                            const parts = prev ? prev.split(" · ") : [];
-                            const otherParts = parts.filter(p => !p.startsWith("Item:") && !p.startsWith("What:") && !p.startsWith("Category:"));
-                            return [`Category: ${cleanTag}`, ...otherParts].join(" · ");
-                          });
-                        }}
-                        style={{
-                          padding: "5px 10px", borderRadius: 16,
-                          background: "rgba(74,158,255,0.08)", border: "1px solid rgba(74,158,255,0.22)",
-                          color: "#80C4FF", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer"
-                        }}>
-                        {tag}
-                      </motion.button>
-                    ))}
+                    ].map(tag => {
+                      const cleanTag = tag.replace(/^[^\w\s/]+/, "").trim();
+                      const isSelected = (purchaseNote || "").split(" · ").some(p => p === `Category: ${cleanTag}`);
+                      return (
+                        <motion.button key={tag} whileTap={{ scale: 0.94 }}
+                          onClick={() => {
+                            setPurchaseNote(prev => {
+                              const parts = prev ? prev.split(" · ") : [];
+                              const otherParts = parts.filter(p => !p.startsWith("Item:") && !p.startsWith("What:") && !p.startsWith("Category:"));
+                              return [`Category: ${cleanTag}`, ...otherParts].join(" · ");
+                            });
+                          }}
+                          style={{
+                            padding: "5px 10px", borderRadius: 16,
+                            background: isSelected ? "rgba(74,158,255,0.24)" : "rgba(74,158,255,0.08)",
+                            border: isSelected ? "1px solid #4A9EFF" : "1px solid rgba(74,158,255,0.22)",
+                            color: isSelected ? "#FFFFFF" : "#80C4FF",
+                            fontSize: 11.5, fontWeight: isSelected ? 700 : 600, fontFamily: "inherit", cursor: "pointer",
+                            transition: "all 0.15s ease"
+                          }}>
+                          {tag}
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -7256,23 +7274,29 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                     2. Platform / Store used
                   </p>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                    {["Swiggy", "Zomato", "Blinkit", "Zepto", "Instamart", "Amazon", "Flipkart", "Uber", "Ola", "Offline Store", "Myntra", "BookMyShow"].map(wh => (
-                      <motion.button key={wh} whileTap={{ scale: 0.94 }}
-                        onClick={() => {
-                          setPurchaseNote(prev => {
-                            const parts = prev ? prev.split(" · ") : [];
-                            const otherParts = parts.filter(p => !p.startsWith("Platform:") && !p.startsWith("Where:"));
-                            return [...otherParts, `Platform: ${wh}`].join(" · ");
-                          });
-                        }}
-                        style={{
-                          padding: "5px 10px", borderRadius: 16,
-                          background: "rgba(232,196,106,0.08)", border: "1px solid rgba(232,196,106,0.22)",
-                          color: T.gold, fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer"
-                        }}>
-                        {wh}
-                      </motion.button>
-                    ))}
+                    {["Swiggy", "Zomato", "Blinkit", "Zepto", "Instamart", "Amazon", "Flipkart", "Uber", "Ola", "Offline Store", "Myntra", "BookMyShow"].map(wh => {
+                      const isSelected = (purchaseNote || "").split(" · ").some(p => p === `Platform: ${wh}`);
+                      return (
+                        <motion.button key={wh} whileTap={{ scale: 0.94 }}
+                          onClick={() => {
+                            setPurchaseNote(prev => {
+                              const parts = prev ? prev.split(" · ") : [];
+                              const otherParts = parts.filter(p => !p.startsWith("Platform:") && !p.startsWith("Where:"));
+                              return [...otherParts, `Platform: ${wh}`].join(" · ");
+                            });
+                          }}
+                          style={{
+                            padding: "5px 10px", borderRadius: 16,
+                            background: isSelected ? "rgba(232,196,106,0.24)" : "rgba(232,196,106,0.08)",
+                            border: isSelected ? "1px solid #E8C46A" : "1px solid rgba(232,196,106,0.22)",
+                            color: isSelected ? "#FFFFFF" : T.gold,
+                            fontSize: 11.5, fontWeight: isSelected ? 700 : 600, fontFamily: "inherit", cursor: "pointer",
+                            transition: "all 0.15s ease"
+                          }}>
+                          {wh}
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -7282,24 +7306,30 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                     3. Expense Purpose
                   </p>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {["👤 Personal", "👥 Shared / Friends", "💼 Work / Office", "🏠 Household"].map(ctx => (
-                      <motion.button key={ctx} whileTap={{ scale: 0.94 }}
-                        onClick={() => {
-                          const cleanCtx = ctx.replace(/^[^\w\s/]+/, "").trim();
-                          setPurchaseNote(prev => {
-                            const parts = prev ? prev.split(" · ") : [];
-                            const otherParts = parts.filter(p => !p.startsWith("Type:") && !p.startsWith("Purpose:"));
-                            return [...otherParts, `Type: ${cleanCtx}`].join(" · ");
-                          });
-                        }}
-                        style={{
-                          padding: "5px 10px", borderRadius: 16,
-                          background: "rgba(104,211,145,0.08)", border: "1px solid rgba(104,211,145,0.22)",
-                          color: "#68D391", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer"
-                        }}>
-                        {ctx}
-                      </motion.button>
-                    ))}
+                    {["👤 Personal", "👥 Shared / Friends", "💼 Work / Office", "🏠 Household"].map(ctx => {
+                      const cleanCtx = ctx.replace(/^[^\w\s/]+/, "").trim();
+                      const isSelected = (purchaseNote || "").split(" · ").some(p => p === `Type: ${cleanCtx}`);
+                      return (
+                        <motion.button key={ctx} whileTap={{ scale: 0.94 }}
+                          onClick={() => {
+                            setPurchaseNote(prev => {
+                              const parts = prev ? prev.split(" · ") : [];
+                              const otherParts = parts.filter(p => !p.startsWith("Type:") && !p.startsWith("Purpose:"));
+                              return [...otherParts, `Type: ${cleanCtx}`].join(" · ");
+                            });
+                          }}
+                          style={{
+                            padding: "5px 10px", borderRadius: 16,
+                            background: isSelected ? "rgba(104,211,145,0.24)" : "rgba(104,211,145,0.08)",
+                            border: isSelected ? "1px solid #68D391" : "1px solid rgba(104,211,145,0.22)",
+                            color: isSelected ? "#FFFFFF" : "#68D391",
+                            fontSize: 11.5, fontWeight: isSelected ? 700 : 600, fontFamily: "inherit", cursor: "pointer",
+                            transition: "all 0.15s ease"
+                          }}>
+                          {ctx}
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
 
