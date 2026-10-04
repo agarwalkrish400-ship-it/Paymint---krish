@@ -3181,9 +3181,10 @@ async function apiSaveNote(transactionId, note) {
   return r; // { bonus_awarded, bonus_coins, coin_balance }
 }
 
-async function apiDeleteTx(transactionId) {
+async function apiDeleteTx(transactionId, founderPw) {
   const r = await apiFetch('/api/transactions', {
     method: 'DELETE',
+    founderPw,
     body: { transactionId },
   });
   if (isErr(r)) return { error: true, message: r.message };
@@ -5470,6 +5471,24 @@ function FounderDashboard({ onClose, founderPw }) {
     setSelUser(null);
   };
 
+  // Delete transaction
+  const handleDeleteTx = async (txId) => {
+    if (!window.confirm("Are you sure you want to delete this transaction? This cannot be undone.")) return;
+    try {
+      const res = await apiDeleteTx(txId, founderPw);
+      if (res && res.error) {
+        setActionMsg("Failed to delete transaction: " + (res.message || "Unknown error"));
+        return;
+      }
+      setTxns(prev => prev.filter(t => String(t.id) !== String(txId)));
+      setActionMsg("Transaction deleted.");
+      setTimeout(() => setActionMsg(""), 3500);
+    } catch (err) {
+      console.error("[Founder handleDeleteTx]", err);
+      setActionMsg("Failed to delete transaction.");
+    }
+  };
+
   // Save edit
   const handleSaveEdit = async () => {
     if (!editUser) return;
@@ -6405,9 +6424,22 @@ function FounderDashboard({ onClose, founderPw }) {
                               <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: T.text }}>{tx.merchant}</p>
                               <p style={{ margin: 0, fontSize: 11, color: T.textMute }}>{timeAgo(tx.created_at)}</p>
                             </div>
-                            <div style={{ textAlign: "right" }}>
-                              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
-                              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: T.gold }}>+{Number(tx.total_coins || tx.coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0).toFixed(1)} coins</p>
+                            <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                              <div>
+                                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
+                                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: T.gold }}>+{Number(tx.total_coins || tx.coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0).toFixed(1)} coins</p>
+                              </div>
+                              <motion.button whileTap={{ scale: 0.88 }}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
+                                title="Delete transaction"
+                                style={{
+                                  background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
+                                  borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
+                                  fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
+                                  justifyContent: "center", padding: 0
+                                }}>
+                                ✕
+                              </motion.button>
                             </div>
                           </div>
                           {tx.screenshot_url && (
@@ -6546,9 +6578,22 @@ function FounderDashboard({ onClose, founderPw }) {
                             </motion.button>
                           )}
                         </div>
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
-                          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: T.gold }}>+{Number(tx.total_coins || tx.coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0).toFixed(1)} coins</p>
+                        <div style={{ textAlign: "right", flexShrink: 0, display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                          <div>
+                            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
+                            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: T.gold }}>+{Number(tx.total_coins || tx.coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0).toFixed(1)} coins</p>
+                          </div>
+                          <motion.button whileTap={{ scale: 0.88 }}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
+                            title="Delete transaction"
+                            style={{
+                              background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
+                              borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
+                              fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
+                              justifyContent: "center", padding: 0
+                            }}>
+                            ✕
+                          </motion.button>
                         </div>
                       </div>
                     </div>
@@ -6632,7 +6677,7 @@ function DismissTimer({ id, onDismiss }) {
   return null;
 }
 
-function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap, onLogout }) {
+function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap, onLogout, founderPw: propFounderPw }) {
   const [tab, setTab] = useState("home");
   const [coins, setCoins] = useState(parseFloat(Number(profile.coin_balance || 0).toFixed(1)));
   const [txns, setTxns] = useState([]);
@@ -6657,11 +6702,13 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
   const [showPwModal, setShowPwModal] = useState(false);
   const [pw, setPw] = useState("");
   const [founderPw, setFounderPw] = useState(() => {
+    if (propFounderPw) return propFounderPw;
     try {
       const u = new URLSearchParams(window.location.search);
-      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '');
+      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
     } catch { return ''; }
   });
+  const isFounderUser = Boolean(founderPw && founderPw.trim());
   const [pwErr, setPwErr] = useState("");
   const tapCount = useRef(0);
   const tapTimer = useRef(null);
@@ -6679,6 +6726,10 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
     if (clean.toUpperCase() === 'BK11') {
       setShowPwModal(false);
       setFounderPw('BK11');
+      try {
+        sessionStorage.setItem('pm_founder_pw', 'BK11');
+        localStorage.setItem('pm_founder_pw', 'BK11');
+      } catch (e) {}
       setPw("");
       setPwErr("");
       setFounderOpen(true);
@@ -6688,6 +6739,10 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
     if (ok) {
       setShowPwModal(false);
       setFounderPw(clean);
+      try {
+        sessionStorage.setItem('pm_founder_pw', clean);
+        localStorage.setItem('pm_founder_pw', clean);
+      } catch (e) {}
       setPw("");
       setPwErr("");
       setFounderOpen(true);
@@ -6745,9 +6800,13 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
   }, [notif]);
 
   const handleDeleteTx = async (txId) => {
+    if (!isFounderUser) {
+      showNotif({ type: "error", title: "Unauthorized", sub: "Founder access required to delete transactions." });
+      return;
+    }
     if (!window.confirm("Are you sure you want to delete this transaction?")) return;
     try {
-      const res = await apiDeleteTx(txId);
+      const res = await apiDeleteTx(txId, founderPw);
       if (res && res.error) {
         showNotif({ type: "error", title: "Delete Failed", sub: res.message || "Could not delete transaction." });
         return;
@@ -7531,17 +7590,19 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                       <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>₹{fmt(tx.amount)}</p>
-                          <motion.button whileTap={{ scale: 0.88 }}
-                            onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
-                            title="Delete transaction"
-                            style={{
-                              background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
-                              borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
-                              fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
-                              justifyContent: "center", padding: 0
-                            }}>
-                            ✕
-                          </motion.button>
+                          {isFounderUser && (
+                            <motion.button whileTap={{ scale: 0.88 }}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
+                              title="Delete transaction"
+                              style={{
+                                background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
+                                borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
+                                fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
+                                justifyContent: "center", padding: 0
+                              }}>
+                              ✕
+                            </motion.button>
+                          )}
                         </div>
                         <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: T.gold }}>+{tx.coins} coins</p>
                       </div>
@@ -7665,17 +7726,19 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                               }}>
                               {tx.purchase_note ? "Edit" : "+ Add"}
                             </motion.button>
-                            <motion.button whileTap={{ scale: 0.88 }}
-                              onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
-                              title="Delete transaction"
-                              style={{
-                                background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
-                                borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
-                                fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
-                                justifyContent: "center", padding: 0
-                              }}>
-                              ✕
-                            </motion.button>
+                            {isFounderUser && (
+                              <motion.button whileTap={{ scale: 0.88 }}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
+                                title="Delete transaction"
+                                style={{
+                                  background: "rgba(255,96,88,0.08)", border: "1px solid rgba(255,96,88,0.2)",
+                                  borderRadius: 5, width: 18, height: 18, color: "#FF6058", fontSize: 10,
+                                  fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
+                                  justifyContent: "center", padding: 0
+                                }}>
+                                ✕
+                              </motion.button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -8513,7 +8576,7 @@ export default function Paymint() {
   const [founderPw, setFounderPw] = useState(() => {
     try {
       const u = new URLSearchParams(window.location.search);
-      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '');
+      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
     } catch { return ''; }
   });
   const [pwErr, setPwErr] = useState("");
@@ -8529,8 +8592,11 @@ export default function Paymint() {
       delCookie("pm_user_email");
       localStorage.removeItem("pm_profile");
       localStorage.removeItem("paymint_user");
+      localStorage.removeItem("pm_founder_pw");
+      sessionStorage.removeItem("pm_founder_pw");
     } catch (e) { }
     setBetaProfile(null);
+    setFounderPw("");
     setAppMode("select_pending");
     setBetaStep("profile");
   };
@@ -8550,6 +8616,10 @@ export default function Paymint() {
     if (clean.toUpperCase() === 'BK11') {
       setShowPwModal(false);
       setFounderPw('BK11');
+      try {
+        sessionStorage.setItem('pm_founder_pw', 'BK11');
+        localStorage.setItem('pm_founder_pw', 'BK11');
+      } catch (e) {}
       setPw("");
       setPwErr("");
       setFounderOpen(true);
@@ -8559,6 +8629,10 @@ export default function Paymint() {
     if (ok) {
       setShowPwModal(false);
       setFounderPw(clean);
+      try {
+        sessionStorage.setItem('pm_founder_pw', clean);
+        localStorage.setItem('pm_founder_pw', clean);
+      } catch (e) {}
       setPw("");
       setPwErr("");
       setFounderOpen(true);
@@ -8760,6 +8834,7 @@ export default function Paymint() {
                     onUpdateProfile={(p) => setBetaProfile(p)}
                     onBetaTap={triggerFounder5Tap}
                     onLogout={handleLogout}
+                    founderPw={founderPw}
                   />
                 </motion.div>
               )}

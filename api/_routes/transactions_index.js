@@ -1,9 +1,44 @@
 import { getDb } from '../_db.js';
-import { authUser, setCorsHeaders } from '../_auth.js';
+import { authUser, isFounder, setCorsHeaders } from '../_auth.js';
 function fmt(t){return{id:t.id,merchant:t.merchant,amount:Number(t.amount),base_coins:Number(t.base_coins),bonus_coins:Number(t.bonus_coins),total_coins:Number(t.total_coins),coins:Number(t.total_coins),txn_id:t.txn_id,txn_date:t.txn_date,txn_time:t.txn_time,payment_app:t.payment_app,bank:t.bank,screenshot_url:t.screenshot_url,purchase_note:t.purchase_note,bonus_claimed:t.bonus_claimed,verified:t.verified,created_at:t.created_at};}
 export default async function handler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  if (req.method === 'DELETE') {
+    if (!isFounder(req)) return res.status(403).json({ error: 'Forbidden' });
+    const { transactionId, txId } = req.body || {};
+    const targetId = transactionId || txId;
+    if (!targetId) return res.status(400).json({ error: 'transactionId required' });
+    const sql = getDb();
+    try {
+      const txRows = await sql`SELECT * FROM transactions WHERE id=${targetId} LIMIT 1`;
+      if (!txRows.length) return res.status(404).json({ error: 'Transaction not found' });
+      const tx = txRows[0];
+      const deductCoins = Number(tx.total_coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0);
+      const deductBase = Number(tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0);
+      const deductBonus = Number(tx.bonus_coins || 0);
+
+      await sql`DELETE FROM transactions WHERE id=${targetId}`;
+      if (tx.user_id) {
+        await sql`UPDATE users SET 
+          coin_balance = GREATEST(0, coin_balance - ${deductCoins}),
+          base_coins = GREATEST(0, base_coins - ${deductBase}),
+          bonus_coins = GREATEST(0, bonus_coins - ${deductBonus}),
+          updated_at = NOW()
+          WHERE id=${tx.user_id}`;
+      }
+
+      let newBalance = 0;
+      if (tx.user_id) {
+        const uRows = await sql`SELECT coin_balance,base_coins,bonus_coins FROM users WHERE id=${tx.user_id}`;
+        newBalance = Number(uRows[0]?.coin_balance || 0);
+      }
+      return res.status(200).json({ ok: true, deletedId: targetId, coin_balance: newBalance });
+    } catch(err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
   const payload = authUser(req);
   if (!payload) return res.status(401).json({ error: 'Unauthorised' });
   const sql = getDb();
@@ -152,32 +187,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: err.message });
     }
   }
-    if (req.method === 'DELETE') {
-    const { transactionId } = req.body || {};
-    if (!transactionId) return res.status(400).json({ error: 'transactionId required' });
-    const sql = getDb();
-    try {
-      const txRows = await sql`SELECT * FROM transactions WHERE id=${transactionId} AND user_id=${payload.userId}`;
-      if (!txRows.length) return res.status(404).json({ error: 'Transaction not found' });
-      const tx = txRows[0];
-      const deductCoins = Number(tx.total_coins || tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0);
-      const deductBase = Number(tx.base_coins || (Number(tx.amount || 0) * 0.10) || 0);
-      const deductBonus = Number(tx.bonus_coins || 0);
 
-      await sql`DELETE FROM transactions WHERE id=${transactionId}`;
-      await sql`UPDATE users SET 
-        coin_balance = GREATEST(0, coin_balance - ${deductCoins}),
-        base_coins = GREATEST(0, base_coins - ${deductBase}),
-        bonus_coins = GREATEST(0, bonus_coins - ${deductBonus}),
-        updated_at = NOW()
-        WHERE id=${payload.userId}`;
-
-      const uRows = await sql`SELECT coin_balance,base_coins,bonus_coins FROM users WHERE id=${payload.userId}`;
-      return res.status(200).json({ ok: true, deletedId: transactionId, coin_balance: Number(uRows[0]?.coin_balance || 0) });
-    } catch(err) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
