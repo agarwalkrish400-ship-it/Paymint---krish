@@ -7570,68 +7570,6 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                 <p style={{ margin: "2px 0 0", fontSize: 13, color: T.textMute }}>Paymint Coins</p>
               </motion.div>
 
-              {/* BRAND REWARDS & CASHBACK BANNER */}
-              <motion.div
-                initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, ...SP.gentle }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setTab("store")}
-                style={{
-                  borderRadius: 20, padding: "15px 16px", marginBottom: 14, cursor: "pointer",
-                  background: "linear-gradient(135deg,rgba(232,196,106,0.12),rgba(74,158,255,0.08))",
-                  border: "1px solid rgba(232,196,106,0.26)",
-                  boxShadow: "0 8px 28px rgba(232,196,106,0.07)"
-                }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <span style={{ fontSize: 16 }}>🎁</span>
-                    <span style={{ fontSize: 12.5, fontWeight: 800, color: T.gold, letterSpacing: "0.03em" }}>REWARDS & VOUCHERS</span>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.blue, background: "rgba(74,158,255,0.14)", border: "1px solid rgba(74,158,255,0.28)", padding: "2px 8px", borderRadius: 12 }}>
-                    Explore 21+ Brands →
-                  </span>
-                </div>
-                <p style={{ margin: "0 0 10px", fontSize: 12, color: T.textSub, lineHeight: 1.45 }}>
-                  Redeem coins for <strong style={{ color: "#E8C46A" }}>5% returns</strong> on Amazon, Swiggy, Netflix & Spotify or <strong style={{ color: "#4A9EFF" }}>1.5% direct UPI cashback</strong>.
-                </p>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {["Amazon", "Swiggy", "Zomato", "Netflix", "Spotify", "Blinkit", "Cashback"].map(b => (
-                    <span key={b} style={{ fontSize: 10.5, fontWeight: 600, color: T.text, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", padding: "2px 7px", borderRadius: 8 }}>
-                      {b}
-                    </span>
-                  ))}
-                </div>
-              </motion.div>
-
-              {/* INSTALL APP ON IOS / WEB BANNER */}
-              <motion.div
-                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, ...SP.gentle }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowInstallModal(true)}
-                style={{
-                  borderRadius: 16, padding: "11px 14px", marginBottom: 14, cursor: "pointer",
-                  background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
-                  display: "flex", alignItems: "center", justifyContent: "space-between"
-                }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 8, background: "rgba(74,158,255,0.14)",
-                    border: "1px solid rgba(74,158,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center"
-                  }}>
-                    <span style={{ fontSize: 14 }}>📲</span>
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: T.text }}>Install Paymint on iPhone / iPad</p>
-                    <p style={{ margin: 0, fontSize: 10.5, color: T.textMute }}>Add to Home Screen for fullscreen native feel</p>
-                  </div>
-                </div>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, color: T.blue, background: "rgba(74,158,255,0.1)",
-                  border: "1px solid rgba(74,158,255,0.2)", padding: "3px 8px", borderRadius: 10
-                }}>
-                  Guide →
-                </span>
-              </motion.div>
-
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.textSub }}>Recent Transactions</p>
                 {txns.length > 2 && (
@@ -7996,7 +7934,7 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                   <p style={{ margin: 0, fontSize: 11, color: T.blue, fontWeight: 600 }}>Beta · {coins.toFixed(1)} coins</p>
                 </div>
                 {[
-                  { l: "Install App (iOS / Web)", ico: "download", fn: () => { setMenuOpen(false); setShowInstallModal(true); } },
+                  { l: "Install Paymint on iPhone / iPad", ico: "phone", fn: () => { setMenuOpen(false); setShowInstallModal(true); } },
                   { l: "Profile", ico: "user", fn: () => { setTab("profile"); setMenuOpen(false); } },
                   { l: "Leaderboard", ico: "trophy", fn: () => { setTab("leaderboard"); setMenuOpen(false); } },
                   { l: "Explore Prototype", ico: "grid", fn: () => { setMenuOpen(false); onExplorePrototype(); } },
@@ -8014,6 +7952,7 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                       border: `1px solid ${item.danger ? "rgba(255,96,88,0.2)" : T.glassBorder}`,
                       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
                     }}>
+                      {item.ico === "phone" && <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="1.5" width="9" height="13" rx="2" stroke={T.blue} strokeWidth="1.3" /><path d="M7 12h2" stroke={T.blue} strokeWidth="1.3" strokeLinecap="round" /></svg>}
                       {item.ico === "download" && <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4.5 7l3.5 3.5L11.5 7M2 12v1.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V12" stroke={T.blue} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                       {item.ico === "user" && <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke={T.textSub} strokeWidth="1.3" /><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke={T.textSub} strokeWidth="1.3" strokeLinecap="round" /></svg>}
                       {item.ico === "trophy" && <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l1.4 2.9 3.2.47-2.3 2.25.54 3.18L8 8.75l-2.84 1.55.54-3.18L3.4 4.87l3.2-.47z" stroke={T.gold} strokeWidth="1.2" strokeLinejoin="round" /></svg>}
