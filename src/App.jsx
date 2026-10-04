@@ -2,7 +2,8 @@ import * as XLSX from 'xlsx';
 import React, { Component, useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogoBadge, RewardStoreView, FounderRewardsTab } from "./RewardsSystem";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+const NotificationAccess = registerPlugin('NotificationAccess');
 import { LocalNotifications } from "@capacitor/local-notifications";
 
 // ─── TOKENS ────────────────────refresh ───────────────────────────────────────────────
@@ -6742,6 +6743,49 @@ function DismissTimer({ id, onDismiss }) {
 }
 
 function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap, onLogout, founderPw: propFounderPw }) {
+  const [notifAccessGranted, setNotifAccessGranted] = useState(true);
+  const [isAndroid, setIsAndroid] = useState(false);
+
+  const checkNotifAccess = useCallback(async () => {
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+        setIsAndroid(true);
+        const res = await NotificationAccess.isGranted();
+        setNotifAccessGranted(Boolean(res && res.enabled));
+      } else {
+        setIsAndroid(false);
+        setNotifAccessGranted(true);
+      }
+    } catch (err) {
+      console.warn('[NotificationAccess] Check error:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkNotifAccess();
+    const handleVis = () => {
+      if (document.visibilityState === 'visible') {
+        checkNotifAccess();
+      }
+    };
+    window.addEventListener('focus', checkNotifAccess);
+    document.addEventListener('visibilitychange', handleVis);
+    return () => {
+      window.removeEventListener('focus', checkNotifAccess);
+      document.removeEventListener('visibilitychange', handleVis);
+    };
+  }, [checkNotifAccess]);
+
+  const handleOpenNotifAccessSettings = async () => {
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+        await NotificationAccess.openSettings();
+      }
+    } catch (err) {
+      console.warn('[NotificationAccess] Open settings error:', err);
+    }
+  };
+
   const [tab, setTab] = useState("home");
   const [coins, setCoins] = useState(parseFloat(Number(profile.coin_balance || 0).toFixed(1)));
   const [txns, setTxns] = useState([]);
