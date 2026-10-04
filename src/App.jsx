@@ -2,6 +2,8 @@ import * as XLSX from 'xlsx';
 import React, { Component, useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogoBadge, RewardStoreView, FounderRewardsTab } from "./RewardsSystem";
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
 // ─── TOKENS ────────────────────refresh ───────────────────────────────────────────────
 const T = {
@@ -8355,6 +8357,60 @@ function IOSInstallModal({ onClose }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // NOTIFICATION PERMISSION MODAL — (Recommended by Krish)
 // ══════════════════════════════════════════════════════════════════════════════
+// ─── INITIAL WELCOME LOCAL NOTIFICATION ─────────────────────────────────────────
+export async function triggerWelcomeNotification() {
+  try {
+    const alreadySent = localStorage.getItem('paymint_welcome_notif_sent');
+    if (alreadySent === 'true') return;
+
+    const title = "Welcome to Paymint! ✨";
+    const body = "You're all set. Pay with any UPI app and upload your payment screenshot to start earning Paymint Coins.";
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await LocalNotifications.createChannel({
+          id: 'paymint_general',
+          name: 'Paymint General',
+          description: 'General Paymint notifications and reminders',
+          importance: 4,
+          visibility: 1,
+          vibration: true
+        });
+      } catch (e) { }
+
+      let perm = await LocalNotifications.checkPermissions();
+      if (perm.display !== 'granted') {
+        perm = await LocalNotifications.requestPermissions();
+      }
+      if (perm.display === 'granted') {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: 1001,
+              title,
+              body,
+              channelId: 'paymint_general',
+              smallIcon: 'ic_dialog_info',
+              schedule: { at: new Date(Date.now() + 600) }
+            }
+          ]
+        });
+        localStorage.setItem('paymint_welcome_notif_sent', 'true');
+      }
+    } else {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, {
+          body,
+          icon: '/logo.png'
+        });
+        localStorage.setItem('paymint_welcome_notif_sent', 'true');
+      }
+    }
+  } catch (err) {
+    console.warn('[Welcome Notification] Failed:', err);
+  }
+}
+
 function NotificationPermissionModal({ onClose }) {
   const handleAllow = async (e) => {
     if (e) {
@@ -8362,15 +8418,38 @@ function NotificationPermissionModal({ onClose }) {
       if (e.stopPropagation) e.stopPropagation();
     }
     try {
-      if (typeof window !== "undefined" && "Notification" in window) {
-        Notification.requestPermission().catch(() => { });
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await LocalNotifications.createChannel({
+            id: 'paymint_general',
+            name: 'Paymint General',
+            description: 'General Paymint notifications and reminders',
+            importance: 4,
+            visibility: 1,
+            vibration: true
+          });
+        } catch (e) { }
+        const permStatus = await LocalNotifications.requestPermissions();
+        if (permStatus.display === 'granted') {
+          localStorage.setItem('paymint_notif_allowed', 'true');
+        } else {
+          localStorage.setItem('paymint_notif_allowed', 'false');
+        }
+      } else {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          const res = await Notification.requestPermission();
+          if (res === 'granted') {
+            localStorage.setItem('paymint_notif_allowed', 'true');
+          } else {
+            localStorage.setItem('paymint_notif_allowed', 'false');
+          }
+        }
       }
-    } catch (err) { }
+    } catch (err) {
+      console.warn('[Notif Permission] Error:', err);
+    }
     try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("paymint_notif_allowed", "true");
-        localStorage.setItem("paymint_notif_prompted", "true");
-      }
+      localStorage.setItem('paymint_notif_prompted', 'true');
     } catch (err) { }
     onClose();
   };
@@ -8845,7 +8924,7 @@ export default function Paymint() {
                 <motion.div key="bp" variants={V} initial="initial" animate="animate" exit="exit"
                   transition={SP.gentle} style={{ position: "absolute", inset: 0 }}>
                   <BetaProfileSetup
-                    onDone={(p, isNew) => { setBetaProfile(p); setUserName(p.name?.split(" ")[0] || "Friend"); setAppMode("beta"); setBetaStep(isNew ? "how" : "dashboard"); }}
+                    onDone={(p, isNew) => { setBetaProfile(p); setUserName(p.name?.split(" ")[0] || "Friend"); setAppMode("beta"); if (!isNew) triggerWelcomeNotification(); setBetaStep(isNew ? "how" : "dashboard"); }}
                     onBetaTap={triggerFounder5Tap}
                   />
                 </motion.div>
@@ -8853,7 +8932,7 @@ export default function Paymint() {
               {betaStep === "how" && (
                 <motion.div key="bhow" variants={V} initial="initial" animate="animate" exit="exit"
                   transition={SP.gentle} style={{ position: "absolute", inset: 0 }}>
-                  <BetaHowCards onStart={() => setBetaStep("dashboard")} />
+                  <BetaHowCards onStart={() => { triggerWelcomeNotification(); setBetaStep("dashboard"); }} />
                 </motion.div>
               )}
               {betaStep === "dashboard" && betaProfile && (
@@ -8883,7 +8962,7 @@ export default function Paymint() {
               {screen === 2 && (<motion.div key="c" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{ position: "absolute", inset: 0 }}><ConnectScreen onNext={() => go(3)} /></motion.div>)}
               {screen === 3 && (<motion.div key="l" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{ position: "absolute", inset: 0 }}><LoadingScreen onDone={() => go(4)} /></motion.div>)}
               {screen === 4 && (<motion.div key="w" variants={V} initial="initial" animate="animate" exit="exit" transition={SP.gentle} style={{ position: "absolute", inset: 0 }}><WelcomeScreen userName={userName} onNext={() => go(5)} /></motion.div>)}
-              {screen === 5 && (<motion.div key="o" variants={V} initial="initial" animate="animate" exit="exit" transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }} style={{ position: "absolute", inset: 0 }}><OnboardingCards onDone={() => go(6)} /></motion.div>)}
+              {screen === 5 && (<motion.div key="o" variants={V} initial="initial" animate="animate" exit="exit" transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }} style={{ position: "absolute", inset: 0 }}><OnboardingCards onDone={() => { triggerWelcomeNotification(); go(6); }} /></motion.div>)}
               {screen === 6 && (<motion.div key="d" variants={D} initial="initial" animate="animate" exit="exit" transition={{ duration: 0.7, ...SP.slow }} style={{ position: "absolute", inset: 0 }}><DashboardScreen userName={userName} onBetaTap={triggerFounder5Tap} /></motion.div>)}
             </AnimatePresence>
           </motion.div>
