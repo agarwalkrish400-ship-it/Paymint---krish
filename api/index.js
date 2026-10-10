@@ -11,6 +11,7 @@ import adminUsers from './_routes/admin_users.js';
 import adminExport from './_routes/admin_export.js';
 import adminExportXlsx from './_routes/admin_export_xlsx.js';
 import adminScreenshot from './_routes/admin_screenshot.js';
+import adminBatchUpdateNotes from './_routes/admin_batch_update_notes.js';
 
 import rewardsIndex from './_routes/rewards_index.js';
 import rewardsClaim from './_routes/rewards_claim.js';
@@ -112,6 +113,7 @@ export default async function handler(req, res) {
     if (p.endsWith('/admin/export-xlsx')) return await adminExportXlsx(req, res);
     if (p.endsWith('/admin/export')) return await adminExport(req, res);
     if (p.endsWith('/admin/screenshot')) return await adminScreenshot(req, res);
+    if (p.endsWith('/admin/batch-update-notes')) return await adminBatchUpdateNotes(req, res);
 
     if (p.endsWith('/rewards/claim')) return await rewardsClaim(req, res);
     if (p.endsWith('/rewards/manage')) return await rewardsManage(req, res);
