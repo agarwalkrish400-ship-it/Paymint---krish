@@ -3208,13 +3208,19 @@ async function apiGetRewards() {
   return r;
 }
 
-async function apiClaimReward(brand, label) {
+async function apiClaimReward(brand, label, cost_coins) {
   const r = await apiFetch('/api/rewards/claim', {
     method: 'POST',
-    body: { brand, label },
+    body: { brand, label, cost_coins: Number(cost_coins) },
   });
-  if (isErr(r)) return { error: true, message: r.message };
+  if (isErr(r)) return { error: true, message: r.message || 'Redemption failed' };
   return r; // { code, coins_spent, coin_balance }
+}
+
+async function apiGetMyRedemptions() {
+  const r = await apiFetch('/api/rewards/claim');
+  if (isErr(r)) return [];
+  return Array.isArray(r) ? r : [];
 }
 
 // ── Founder Dashboard API ─────────────────────────────────────────────────────
@@ -6788,6 +6794,11 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
 
   const [tab, setTab] = useState("home");
   const [coins, setCoins] = useState(parseFloat(Number(profile.coin_balance || 0).toFixed(1)));
+  useEffect(() => {
+    if (profile && profile.coin_balance !== undefined) {
+      setCoins(parseFloat(Number(profile.coin_balance || 0).toFixed(1)));
+    }
+  }, [profile?.coin_balance]);
   const [txns, setTxns] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -6885,6 +6896,24 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
         const allRw = await apiGetRewards();
         // apiGetRewards() already returns grouped {brand,label,cost_coins,available}
         setStoreRewards(allRw);
+        // Redemption history
+        try {
+          const myRedeemed = await apiGetMyRedemptions();
+          if (myRedeemed && myRedeemed.length > 0) {
+            const codeMap = {};
+            myRedeemed.forEach(r => {
+              codeMap[r.brand + "||" + r.label] = r.code;
+            });
+            setRedeemedCodes(codeMap);
+            await lc.set("beta-redeemed-" + profile.email, codeMap);
+          } else {
+            const cachedRedeemed = await lc.get("beta-redeemed-" + profile.email);
+            if (cachedRedeemed) setRedeemedCodes(cachedRedeemed);
+          }
+        } catch {
+          const cachedRedeemed = await lc.get("beta-redeemed-" + profile.email);
+          if (cachedRedeemed) setRedeemedCodes(cachedRedeemed);
+        }
       } catch (err) {
         console.error("[Dashboard] Load failed:", err.message);
         const cached = await lc.get("beta-txns-" + profile.email);
@@ -7840,12 +7869,22 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                     claimed = await apiClaimReward(brand, label, cost_coins);
                   } catch (e) {
                     console.error("Redeem API error:", e);
+                    claimed = { error: true, message: e.message };
                   }
-                  const code = claimed?.code || generateSimulationCode(brand);
-                  const newCoins = claimed?.coin_balance ?? Math.max(0, parseFloat((coins - cost_coins).toFixed(1)));
+                  if (!claimed || claimed.error || !claimed.code || claimed.coin_balance === undefined) {
+                    const msg = claimed?.message || "Redemption failed. Please try again.";
+                    showNotif({ type: "error", title: "Redemption Failed", sub: msg });
+                    return { error: true, message: msg };
+                  }
+                  const code = claimed.code;
+                  const newCoins = parseFloat(Number(claimed.coin_balance).toFixed(1));
                   setCoins(newCoins);
                   const key = brand + "||" + label;
-                  setRedeemedCodes(prev => ({ ...prev, [key]: code }));
+                  setRedeemedCodes(prev => {
+                    const updated = { ...prev, [key]: code };
+                    lc.set("beta-redeemed-" + profile.email, updated);
+                    return updated;
+                  });
                   const up = { ...profile, coin_balance: newCoins };
                   await lc.set("beta-profile", up);
                   onUpdateProfile(up);

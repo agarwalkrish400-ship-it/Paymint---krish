@@ -799,21 +799,17 @@ export function RewardStoreView({
       if (onClaimReward) {
         result = await onClaimReward(reward.brand, reward.label, reward.cost_coins);
       }
-      const code = result?.code || generateSimulationCode(reward.brand);
+      if (!result || result.error || !result.code) {
+        // Redemption failed on server - do not show false success modal
+        return;
+      }
       setClaimSuccessData({
         ...reward,
-        code,
+        code: result.code,
         claimedAt: new Date().toISOString(),
       });
     } catch (err) {
       console.error("Claim error:", err);
-      // Fallback simulated success
-      const code = generateSimulationCode(reward.brand);
-      setClaimSuccessData({
-        ...reward,
-        code,
-        claimedAt: new Date().toISOString(),
-      });
     } finally {
       setIsClaiming(false);
     }
