@@ -6832,7 +6832,6 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
       const u = new URLSearchParams(window.location.search);
       const f = u.get('founder') || u.get('founderPw');
       if (f) return f.trim().toUpperCase() === '1993';
-      if (window.location.hash.includes('founder')) return true;
       return false;
     } catch { return false; }
   });
@@ -6849,7 +6848,6 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
       const u = new URLSearchParams(window.location.search);
       const q = u.get('founder') || u.get('founderPw');
       if (q) return q.trim().toUpperCase() === '1993' ? '1993' : '';
-      if (window.location.hash.includes('founder')) return '1993';
       const s = sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
       return (s && s.trim().toUpperCase() !== 'BK11') ? s : '';
     } catch { return ''; }
@@ -8793,7 +8791,6 @@ export default function Paymint() {
       const u = new URLSearchParams(window.location.search);
       const f = u.get('founder') || u.get('founderPw');
       if (f) return f.trim().toUpperCase() === '1993';
-      if (window.location.hash.includes('founder')) return true;
       return false;
     } catch { return false; }
   });
@@ -8806,7 +8803,6 @@ export default function Paymint() {
       const u = new URLSearchParams(window.location.search);
       const q = u.get('founder') || u.get('founderPw');
       if (q) return q.trim().toUpperCase() === '1993' ? '1993' : '';
-      if (window.location.hash.includes('founder')) return '1993';
       const s = sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
       return (s && s.trim().toUpperCase() !== 'BK11') ? s : '';
     } catch { return ''; }
