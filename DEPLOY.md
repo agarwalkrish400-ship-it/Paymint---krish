@@ -32,7 +32,7 @@ Vercel → your project → **Settings → Environment Variables**
 |---|---|
 | `JWT_SECRET` | `25d501ba34270a9318fb2c8288efe7909ea2fc222cd265831f415974402a5529` |
 | `INIT_SECRET` | `1DLSa4yFLf__VSxHnSkYsEJjAFSI0g8P` |
-| `FOUNDER_PASSWORD` | `BK11` |
+| `FOUNDER_PASSWORD` | `1993` |
 | `DATABASE_URL` | *from neon.tech* |
 | `OCR_SPACE_API_KEY` | *from ocr.space* |
 | `CLOUDINARY_CLOUD_NAME` | *optional* |
@@ -50,7 +50,7 @@ Should return: `{"ok":true,"message":"All tables created."}`
 ---
 
 ## Founder Dashboard
-Tap **PAYMINT BETA** 5× → Password: **BK11**
+Tap **PAYMINT BETA** 5× → Password: **1993**
 
 ## Coin Calculation (server-side)
 ```

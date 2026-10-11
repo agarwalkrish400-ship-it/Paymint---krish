@@ -3226,9 +3226,9 @@ async function apiGetMyRedemptions() {
 // ── Founder Dashboard API ─────────────────────────────────────────────────────
 async function apiAdminAuth(pw) {
   const clean = (pw || '').trim().toUpperCase();
-  if (clean === 'BK11') return true;
+  if (clean === '1993') return true;
   const r = await apiFetch('/api/admin/auth', { method: 'POST', body: { password: pw } });
-  return (!isErr(r) && r.ok) || clean === 'BK11';
+  return (!isErr(r) && r.ok) || clean === '1993';
 }
 
 async function apiAdminOverview(pw) {
@@ -5593,7 +5593,7 @@ function FounderDashboard({ onClose, founderPw }) {
   const handleDownloadScreenshot = (tx) => {
     if (!tx) return;
     if (tx.id) {
-      window.open(`/api/admin/screenshot?id=${tx.id}&download=1&founderPw=${encodeURIComponent(founderPw || 'BK11')}`, "_blank");
+      window.open(`/api/admin/screenshot?id=${tx.id}&download=1&founderPw=${encodeURIComponent(founderPw || '1993')}`, "_blank");
       return;
     }
     const url = tx.screenshot_url ? String(tx.screenshot_url).trim() : '';
@@ -5644,7 +5644,7 @@ function FounderDashboard({ onClose, founderPw }) {
       return;
     }
     if (tx.id) {
-      window.open(`/api/admin/screenshot?id=${tx.id}&founderPw=${encodeURIComponent(founderPw || 'BK11')}`, "_blank", "noopener,noreferrer");
+      window.open(`/api/admin/screenshot?id=${tx.id}&founderPw=${encodeURIComponent(founderPw || '1993')}`, "_blank", "noopener,noreferrer");
       return;
     }
     handleDownloadScreenshot(tx);
@@ -5698,7 +5698,7 @@ function FounderDashboard({ onClose, founderPw }) {
         if (t.screenshot_url && t.screenshot_url.startsWith("http")) {
           ssText = t.screenshot_url;
         } else if (t.screenshot_url && t.screenshot_url.startsWith("data:image")) {
-          ssText = `https://paymint-krish2.vercel.app/api/admin/screenshot?id=${t.id}&founderPw=${encodeURIComponent(founderPw || 'BK11')}`;
+          ssText = `https://paymint-krish2.vercel.app/api/admin/screenshot?id=${t.id}&founderPw=${encodeURIComponent(founderPw || '1993')}`;
         }
         return [
           t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN') : (t.txn_date || ""),
@@ -5757,7 +5757,7 @@ function FounderDashboard({ onClose, founderPw }) {
     } catch (err) {
       console.error('[Export XLSX Error]', err);
       // Fallback: direct download from server route
-      window.open(`/api/admin/export-xlsx?founderPw=${encodeURIComponent(founderPw || 'BK11')}`, '_blank');
+      window.open(`/api/admin/export-xlsx?founderPw=${encodeURIComponent(founderPw || '1993')}`, '_blank');
     }
   };
 
@@ -5979,7 +5979,7 @@ function FounderDashboard({ onClose, founderPw }) {
                 background:"radial-gradient(ellipse at center, rgba(30,30,42,0.6) 0%, rgba(5,5,8,0.98) 100%)",
                 cursor:"zoom-out"}}>
               <img
-                src={getScreenshotSrc(previewTx.screenshot_url || `/api/admin/screenshot?id=${previewTx.id}&founderPw=${encodeURIComponent(founderPw || 'BK11')}`)}
+                src={getScreenshotSrc(previewTx.screenshot_url || `/api/admin/screenshot?id=${previewTx.id}&founderPw=${encodeURIComponent(founderPw || '1993')}`)}
                 alt="Transaction Screenshot"
                 onClick={(e)=>{e.stopPropagation();setImgZoomed(z=>!z);}}
                 style={{
@@ -6824,7 +6824,7 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
     if (propFounderPw) return propFounderPw;
     try {
       const u = new URLSearchParams(window.location.search);
-      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
+      return u.get('founder') || (window.location.hash.includes('founder') ? '1993' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
     } catch { return ''; }
   });
   const isFounderUser = Boolean(founderPw && founderPw.trim());
@@ -6842,12 +6842,12 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
   };
   const handlePwSubmit = async () => {
     const clean = (pw || '').trim();
-    if (clean.toUpperCase() === 'BK11') {
+    if (clean.toUpperCase() === '1993') {
       setShowPwModal(false);
-      setFounderPw('BK11');
+      setFounderPw('1993');
       try {
-        sessionStorage.setItem('pm_founder_pw', 'BK11');
-        localStorage.setItem('pm_founder_pw', 'BK11');
+        sessionStorage.setItem('pm_founder_pw', '1993');
+        localStorage.setItem('pm_founder_pw', '1993');
       } catch (e) {}
       setPw("");
       setPwErr("");
@@ -7176,9 +7176,9 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
                     const val = e.target.value;
                     setPw(val);
                     setPwErr("");
-                    if (val.trim().toUpperCase() === 'BK11') {
+                    if (val.trim().toUpperCase() === '1993') {
                       setShowPwModal(false);
-                      setFounderPw('BK11');
+                      setFounderPw('1993');
                       setPw('');
                       setFounderOpen(true);
                     }
@@ -8769,7 +8769,7 @@ export default function Paymint() {
   const [founderPw, setFounderPw] = useState(() => {
     try {
       const u = new URLSearchParams(window.location.search);
-      return u.get('founder') || (window.location.hash.includes('founder') ? 'BK11' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
+      return u.get('founder') || (window.location.hash.includes('founder') ? '1993' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
     } catch { return ''; }
   });
   const [pwErr, setPwErr] = useState("");
@@ -8806,12 +8806,12 @@ export default function Paymint() {
 
   const handlePwSubmit = async () => {
     const clean = (pw || '').trim();
-    if (clean.toUpperCase() === 'BK11') {
+    if (clean.toUpperCase() === '1993') {
       setShowPwModal(false);
-      setFounderPw('BK11');
+      setFounderPw('1993');
       try {
-        sessionStorage.setItem('pm_founder_pw', 'BK11');
-        localStorage.setItem('pm_founder_pw', 'BK11');
+        sessionStorage.setItem('pm_founder_pw', '1993');
+        localStorage.setItem('pm_founder_pw', '1993');
       } catch (e) {}
       setPw("");
       setPwErr("");
@@ -9114,9 +9114,9 @@ export default function Paymint() {
                     const val = e.target.value;
                     setPw(val);
                     setPwErr("");
-                    if (val.trim().toUpperCase() === 'BK11') {
+                    if (val.trim().toUpperCase() === '1993') {
                       setShowPwModal(false);
-                      setFounderPw('BK11');
+                      setFounderPw('1993');
                       setPw('');
                       setFounderOpen(true);
                     }

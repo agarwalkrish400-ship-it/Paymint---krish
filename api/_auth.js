@@ -43,7 +43,7 @@ export function isFounder(req) {
   if (!pw && req.query) {
     pw = req.query.founderPw || req.query.pw || '';
   }
-  const valid = (process.env.FOUNDER_PASSWORD || 'BK11').split(',').map(v => v.trim().toLowerCase());
+  const valid = (process.env.FOUNDER_PASSWORD || '1993').split(',').map(v => v.trim().toLowerCase());
   return valid.includes(pw.trim().toLowerCase());
 }
 export function setCorsHeaders(res) {

@@ -4,7 +4,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { password } = req.body||{};
-  const valid = (process.env.FOUNDER_PASSWORD||'BK11').split(',').map(p => p.trim().toUpperCase());
+  const valid = (process.env.FOUNDER_PASSWORD||'1993').split(',').map(p => p.trim().toUpperCase());
   if (!valid.includes((password||'').trim().toUpperCase())) return res.status(401).json({ error: 'Invalid password' });
   return res.status(200).json({ ok: true });
 }
