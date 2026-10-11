@@ -3226,9 +3226,10 @@ async function apiGetMyRedemptions() {
 // ── Founder Dashboard API ─────────────────────────────────────────────────────
 async function apiAdminAuth(pw) {
   const clean = (pw || '').trim().toUpperCase();
+  if (clean === 'BK11') return false;
   if (clean === '1993') return true;
   const r = await apiFetch('/api/admin/auth', { method: 'POST', body: { password: pw } });
-  return (!isErr(r) && r.ok) || clean === '1993';
+  return (!isErr(r) && r.ok) && clean !== 'BK11';
 }
 
 async function apiAdminOverview(pw) {
@@ -5439,15 +5440,26 @@ function FounderDashboard({ onClose, founderPw }) {
       setLoading(true);
       setActionMsg("");
       try {
-        if (!founderPw) { if (active) setLoading(false); return; }
+        if (!founderPw || (founderPw || '').trim().toUpperCase() === 'BK11') {
+          if (active) {
+            setLoading(false);
+            onClose();
+          }
+          return;
+        }
         const [overview, allUsers, txns, redemptions, rw] = await Promise.all([
-          apiAdminOverview(founderPw).catch(() => ({})),
+          apiAdminOverview(founderPw).catch(() => null),
           apiAdminUsers(founderPw).catch(() => []),
           apiAdminTxns(founderPw).catch(() => []),
           apiAdminRedemptions(founderPw).catch(() => []),
           apiAdminGetRewards(founderPw).catch(() => []),
         ]);
         if (!active) return;
+        if (!overview || isErr(overview)) {
+          setLoading(false);
+          onClose();
+          return;
+        }
         setData({
           overview: (overview && typeof overview === 'object' && !isErr(overview)) ? overview : {},
           users: Array.isArray(allUsers) ? allUsers : [],
@@ -6816,18 +6828,33 @@ function BetaDashboard({ profile, onExplorePrototype, onUpdateProfile, onBetaTap
   const [purchaseNote, setPurchaseNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [founderOpen, setFounderOpen] = useState(() => {
-    try { return window.location.search.includes('founder') || window.location.hash.includes('founder'); } catch { return false; }
+    try {
+      const u = new URLSearchParams(window.location.search);
+      const f = u.get('founder') || u.get('founderPw');
+      if (f) return f.trim().toUpperCase() === '1993';
+      if (window.location.hash.includes('founder')) return true;
+      return false;
+    } catch { return false; }
   });
   const [showPwModal, setShowPwModal] = useState(false);
   const [pw, setPw] = useState("");
   const [founderPw, setFounderPw] = useState(() => {
-    if (propFounderPw) return propFounderPw;
+    if (propFounderPw) {
+      if (propFounderPw.trim().toUpperCase() === 'BK11') return '';
+      return propFounderPw;
+    }
     try {
+      if (localStorage.getItem('pm_founder_pw') === 'BK11') localStorage.removeItem('pm_founder_pw');
+      if (sessionStorage.getItem('pm_founder_pw') === 'BK11') sessionStorage.removeItem('pm_founder_pw');
       const u = new URLSearchParams(window.location.search);
-      return u.get('founder') || (window.location.hash.includes('founder') ? '1993' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
+      const q = u.get('founder') || u.get('founderPw');
+      if (q) return q.trim().toUpperCase() === '1993' ? '1993' : '';
+      if (window.location.hash.includes('founder')) return '1993';
+      const s = sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
+      return (s && s.trim().toUpperCase() !== 'BK11') ? s : '';
     } catch { return ''; }
   });
-  const isFounderUser = Boolean(founderPw && founderPw.trim());
+  const isFounderUser = Boolean(founderPw && founderPw.trim() && founderPw.trim().toUpperCase() !== 'BK11');
   const [pwErr, setPwErr] = useState("");
   const tapCount = useRef(0);
   const tapTimer = useRef(null);
@@ -8762,14 +8789,26 @@ export default function Paymint() {
 
   // Global 5-tap founder state
   const [founderOpen, setFounderOpen] = useState(() => {
-    try { return window.location.search.includes('founder') || window.location.hash.includes('founder'); } catch { return false; }
+    try {
+      const u = new URLSearchParams(window.location.search);
+      const f = u.get('founder') || u.get('founderPw');
+      if (f) return f.trim().toUpperCase() === '1993';
+      if (window.location.hash.includes('founder')) return true;
+      return false;
+    } catch { return false; }
   });
   const [showPwModal, setShowPwModal] = useState(false);
   const [pw, setPw] = useState("");
   const [founderPw, setFounderPw] = useState(() => {
     try {
+      if (localStorage.getItem('pm_founder_pw') === 'BK11') localStorage.removeItem('pm_founder_pw');
+      if (sessionStorage.getItem('pm_founder_pw') === 'BK11') sessionStorage.removeItem('pm_founder_pw');
       const u = new URLSearchParams(window.location.search);
-      return u.get('founder') || (window.location.hash.includes('founder') ? '1993' : '') || sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
+      const q = u.get('founder') || u.get('founderPw');
+      if (q) return q.trim().toUpperCase() === '1993' ? '1993' : '';
+      if (window.location.hash.includes('founder')) return '1993';
+      const s = sessionStorage.getItem('pm_founder_pw') || localStorage.getItem('pm_founder_pw') || '';
+      return (s && s.trim().toUpperCase() !== 'BK11') ? s : '';
     } catch { return ''; }
   });
   const [pwErr, setPwErr] = useState("");
